@@ -1,0 +1,6 @@
+scan_targets:
+  - "."
+ignore_dirs:
+  - ".git"
+  - "node_modules"
+  - "vendor"

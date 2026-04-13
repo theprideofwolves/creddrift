@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CredDrift Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --glass-bg: rgba(30, 41, 59, 0.7);
+            --glass-border: rgba(255, 255, 255, 0.1);
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --accent-color: #38bdf8;
+            --accent-glow: rgba(56, 189, 248, 0.4);
+            --status-active: #10b981;
+            --status-needs-rotation: #f59e0b;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Outfit', sans-serif;
+            background-color: var(--bg-color);
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(56, 189, 248, 0.15) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(99, 102, 241, 0.15) 0px, transparent 50%);
+            background-attachment: fixed;
+            color: var(--text-primary);
+            display: flex;
+            justify-content: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            width: 95%;
+            max-width: 1400px;
+            margin-top: 50px;
+            margin-bottom: 50px;
+        }
+
+        .header-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 30px;
+        }
+
+        .scan-bar {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        input[type="text"] {
+            padding: 10px 16px;
+            border-radius: 8px;
+            border: 1px solid var(--glass-border);
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-primary);
+            font-family: inherit;
+            min-width: 280px;
+            font-size: 0.95rem;
+            transition: all 0.2s;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            border-color: var(--accent-color);
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+            accent-color: var(--accent-color);
+        }
+
+        h1 {
+            font-size: 3rem;
+            font-weight: 700;
+            margin-bottom: 5px;
+            margin-top: 0;
+            background: linear-gradient(to right, #38bdf8, #818cf8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 30px var(--accent-glow);
+        }
+
+        p.subtitle {
+            color: var(--text-secondary);
+            font-size: 1.2rem;
+            margin-top: 0;
+            margin-bottom: 0;
+        }
+
+        .hamburger-btn {
+            font-size: 2.5rem;
+            cursor: pointer;
+            color: var(--text-primary);
+            transition: color 0.3s;
+        }
+        .hamburger-btn:hover { color: var(--accent-color); }
+
+        .side-menu {
+            height: 100%;
+            width: 0;
+            position: fixed;
+            z-index: 1000;
+            top: 0;
+            left: 0;
+            background: rgba(15, 23, 42, 0.95);
+            backdrop-filter: blur(10px);
+            overflow-x: hidden;
+            transition: 0.3s;
+            padding-top: 60px;
+            border-right: 1px solid var(--glass-border);
+        }
+
+        .side-menu a {
+            padding: 12px 12px 12px 32px;
+            text-decoration: none;
+            font-size: 1.5rem;
+            color: var(--text-secondary);
+            display: block;
+            transition: 0.3s;
+        }
+
+        .side-menu a:hover { color: var(--text-primary); background: rgba(255,255,255,0.05); }
+        .side-menu .close-btn { 
+            position: absolute; 
+            top: 10px; 
+            right: 25px; 
+            font-size: 36px;  
+            padding: 8px;
+            background: none;
+        }
+
+        .glass-panel {
+            background: var(--glass-bg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        }
+
+        .bulk-toolbar {
+            margin-bottom: 20px; 
+            padding: 15px 25px; 
+            display: flex; 
+            align-items: center; 
+            justify-content: space-between;
+            animation: slideUp 0.4s ease-out;
+        }
+
+        .table-container {
+            padding: 15px 30px 30px 30px;
+            overflow-x: auto;
+            animation: slideUp 0.6s ease-out;
+        }
+
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0 10px;
+            min-width: 1000px;
+        }
+
+        th {
+            text-align: left;
+            color: var(--text-secondary);
+            font-weight: 600;
+            padding: 10px 15px;
+            border-bottom: 1px solid var(--glass-border);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-size: 0.85rem;
+        }
+
+        th.sortable { cursor: pointer; user-select: none; transition: color 0.2s; }
+        th.sortable:hover { color: var(--text-primary); }
+        .sort-icon { font-size: 0.8em; margin-left: 4px; color: var(--accent-color); }
+
+        td {
+            padding: 16px 15px;
+            background: rgba(255, 255, 255, 0.03);
+            transition: all 0.3s ease;
+            vertical-align: middle;
+        }
+
+        tr:hover td {
+            background: rgba(255, 255, 255, 0.07);
+        }
+
+        td:first-child { border-top-left-radius: 12px; border-bottom-left-radius: 12px; }
+        td:nth-child(2) { font-family: monospace; color: #cbd5e1; font-size: 0.9rem; }
+        td:last-child { border-top-right-radius: 12px; border-bottom-right-radius: 12px; }
+
+        .type-badge {
+            background: rgba(56, 189, 248, 0.1);
+            color: var(--accent-color);
+            padding: 4px 10px;
+            border-radius: 16px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            border: 1px solid rgba(56, 189, 248, 0.2);
+            white-space: nowrap;
+        }
+
+        .status {
+            display: inline-flex;
+            align-items: center;
+            font-weight: 600;
+            font-size: 0.9rem;
+            white-space: nowrap;
+        }
+
+        .status::before {
+            content: '';
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 8px;
+            box-shadow: 0 0 10px currentColor;
+        }
+
+        .status.active { color: var(--status-active); }
+        .status.needs-rotation { color: var(--status-needs-rotation); }
+        .status.drift { color: #ef4444; }
+
+        .file-loc { font-size: 0.85rem; color: #94a3b8; word-break: break-all; }
+        .entropy { font-variant-numeric: tabular-nums; }
+
+        .btn {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            color: var(--text-primary);
+            padding: 8px 14px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-family: inherit;
+            margin-right: 5px;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+        .btn:hover:not(:disabled) { background: rgba(255,255,255,0.15); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
+        
+        .btn-warning { color: #facc15; border-color: rgba(250, 204, 21, 0.3); }
+        .btn-warning:hover { background: rgba(250, 204, 21, 0.1); color: #fef08a; }
+        
+        .btn-danger { color: #f87171; border-color: rgba(248, 113, 113, 0.3); }
+        .btn-danger:hover { background: rgba(248, 113, 113, 0.1); }
+
+        .btn-primary { color: #38bdf8; border-color: rgba(56, 189, 248, 0.3); }
+        .btn-primary:hover { background: rgba(56, 189, 248, 0.1); }
+
+        .btn-group { display: flex; flex-wrap: wrap; gap: 6px; }
+
+        .tooltip {
+            position: relative;
+            display: inline-block;
+            margin-left: 6px;
+            color: #94a3b8;
+            cursor: help;
+            font-weight: bold;
+            font-size: 0.9em;
+        }
+        .tooltip .tooltiptext {
+            visibility: hidden;
+            width: 250px;
+            background-color: var(--bg-color);
+            color: #fff;
+            text-align: left;
+            border-radius: 8px;
+            padding: 10px;
+            position: absolute;
+            z-index: 10;
+            bottom: 150%;
+            left: 50%;
+            margin-left: -125px;
+            border: 1px solid var(--glass-border);
+            font-size: 0.8rem;
+            font-weight: normal;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+            line-height: 1.4;
+        }
+        .tooltip:hover .tooltiptext { visibility: visible; }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-secondary);
+            font-size: 1.1rem;
+        }
+    </style>
+    <script>
+        function toggleMenu() {
+            var menu = document.getElementById("mainMenu");
+            if (menu.style.width === "300px") {
+                menu.style.width = "0";
+            } else {
+                menu.style.width = "300px";
+            }
+        }
+
+        // --- Bulk Actions & Scanning Logic --- //
+        function postBulkAction(endpoint, paramKey, valsArray) {
+            if (valsArray.length === 0) return;
+            const formData = new FormData();
+            formData.append(paramKey, valsArray.join(','));
+            fetch(endpoint, { method: 'POST', body: formData })
+                .then(() => window.location.reload())
+                .catch(err => console.error(err));
+        }
+
+        function getCheckedRows() {
+            let boxes = document.querySelectorAll('.row-check:checked');
+            return Array.from(boxes);
+        }
+
+        function bulkAction(action) {
+            let checked = getCheckedRows();
+            if (checked.length === 0) {
+                alert("Please select at least one secret.");
+                return;
+            }
+            if (action === 'rotate') {
+                postBulkAction('/api/rotate', 'hashes', checked.map(b => b.dataset.hash));
+            } else if (action === 'ignore') {
+                postBulkAction('/api/ignore', 'hashes', checked.map(b => b.dataset.hash));
+            } else if (action === 'restore') {
+                postBulkAction('/api/restore', 'hashes', checked.map(b => b.dataset.hash));
+            } else if (action === 'reveal') {
+                postBulkAction('/api/reveal', 'paths', [checked[0].dataset.path]);
+            } else if (action === 'copy') {
+                let textBlock = checked.map(b => b.dataset.path).join('\n');
+                navigator.clipboard.writeText(textBlock).then(() => alert("Copied paths to clipboard!"));
+            }
+        }
+
+        function browsePath() {
+            fetch('/api/browse')
+                .then(res => res.text())
+                .then(path => {
+                    let trimPath = path.trim();
+                    if (trimPath) {
+                        document.getElementById("scanPathInput").value = trimPath;
+                    }
+                })
+                .catch(err => console.error("Browse error:", err));
+        }
+
+        function setScanPath() {
+            let btn = document.getElementById("scanBtn");
+            let input = document.getElementById("scanPathInput");
+            if(input && input.value) {
+                btn.innerText = "Scanning...";
+                btn.disabled = true;
+                const formData = new FormData();
+                formData.append("path", input.value);
+                fetch("/api/set-path", { method: 'POST', body: formData })
+                    .then(() => window.location.href = "/")
+                    .catch(err => console.error(err));
+            }
+        }
+
+        document.addEventListener("DOMContentLoaded", function() {
+            let selectAll = document.getElementById("selectAll");
+            let rowCheckboxes = document.querySelectorAll('.row-check');
+            let countSpan = document.getElementById("selectedCount");
+
+            function updateCount() {
+                let count = document.querySelectorAll('.row-check:checked').length;
+                if(countSpan) countSpan.innerText = count;
+
+                let allBtns = document.querySelectorAll('.btn-bulk');
+                let singleBtns = document.querySelectorAll('.chk-single');
+                
+                if (count === 0) {
+                    allBtns.forEach(btn => btn.disabled = true);
+                } else if (count === 1) {
+                    allBtns.forEach(btn => btn.disabled = false);
+                } else {
+                    allBtns.forEach(btn => btn.disabled = false);
+                    singleBtns.forEach(btn => btn.disabled = true);
+                }
+            }
+
+            if(selectAll) {
+                selectAll.addEventListener("change", function() {
+                    let isChecked = selectAll.checked;
+                    rowCheckboxes.forEach(cb => cb.checked = isChecked);
+                    updateCount();
+                });
+            }
+
+            rowCheckboxes.forEach(cb => {
+                cb.addEventListener("change", updateCount);
+            });
+            updateCount();
+        });
+
+        // --- Table Sorting --- //
+        let sortDirections = [true, true, true, true, true, true, true, true]; 
+
+        function sortTable(colIndex) {
+            let table = document.getElementById("secretsTable");
+            let rows = Array.from(table.rows).slice(1);
+            let isAscending = sortDirections[colIndex];
+            
+            rows.sort((a, b) => {
+                let textA = a.cells[colIndex].innerText.trim();
+                let textB = b.cells[colIndex].innerText.trim();
+
+                // Entropy column needs numeric sorting
+                if (colIndex === 5) {
+                    return isAscending ? parseFloat(textA) - parseFloat(textB) : parseFloat(textB) - parseFloat(textA);
+                }
+
+                if (textA < textB) return isAscending ? -1 : 1;
+                if (textA > textB) return isAscending ? 1 : -1;
+                return 0;
+            });
+
+            sortDirections[colIndex] = !isAscending;
+
+            let tbody = table.querySelector("tbody");
+            rows.forEach(row => tbody.appendChild(row));
+
+            let icons = table.querySelectorAll(".sort-icon");
+            icons.forEach(icon => icon.innerText = "↕");
+
+            let clickedIcon = table.querySelectorAll("th")[colIndex].querySelector(".sort-icon");
+            if(clickedIcon) clickedIcon.innerText = isAscending ? "▲" : "▼";
+        }
+    </script>
+</head>
+<body>
+    <div id="mainMenu" class="side-menu">
+        <a href="javascript:void(0)" class="close-btn" onclick="toggleMenu()">&times;</a>
+        <a href="/">Main Dashboard</a>
+        <a href="/?view=ignored">Ignored Keys</a>
+        <a href="/?view=history">Rotation History</a>
+    </div>
+
+    <div class="container">
+        <div class="header-bar">
+            <div>
+                <h1>CredDrift Dashboard</h1>
+                <p class="subtitle">
+                    {{if eq .View "ignored"}} Viewing Risk Accepted Keys
+                    {{else if eq .View "history"}} Viewing Read-Only Audit Log
+                    {{else}} Active Secrets Inventory
+                    {{end}}
+                </p>
+            </div>
+            
+            <div class="scan-bar">
+                <button class="btn" onclick="browsePath()" style="margin:0;">Browse</button>
+                <input type="text" id="scanPathInput" placeholder="Enter absolute workspace path (/path/to/repo)">
+                <button id="scanBtn" class="btn btn-primary" onclick="setScanPath()">Set Scan Path</button>
+            </div>
+            
+            <div class="hamburger-btn" onclick="toggleMenu()">&#9776;</div>
+        </div>
+        
+        <div class="glass-panel bulk-toolbar">
+            <div style="font-size: 1.1rem;">
+                <span id="selectedCount" style="color: var(--accent-color); font-weight: 700; font-size: 1.2rem;">0</span> items selected
+            </div>
+            <div class="btn-group">
+                {{if eq .View "history"}}
+                    <button class="btn btn-bulk chk-single" onclick="bulkAction('copy')" disabled>Copy Path</button>
+                    <button class="btn btn-bulk chk-single" onclick="bulkAction('reveal')" disabled>Reveal in Explorer</button>
+                {{else if eq .View "ignored"}}
+                    <button class="btn btn-primary btn-bulk" onclick="bulkAction('restore')" disabled>Mark as Important</button>
+                    <button class="btn btn-bulk chk-single" onclick="bulkAction('copy')" disabled>Copy Path</button>
+                    <button class="btn btn-bulk chk-single" onclick="bulkAction('reveal')" disabled>Reveal in Explorer</button>
+                {{else}}
+                    <button class="btn btn-warning btn-bulk" onclick="bulkAction('rotate')" disabled>
+                        Mark as Rotated
+                        <span class="tooltip">?<span class="tooltiptext">Only click this if you replaced the old secret with a new one. Your new key will appear here after the next scan.</span></span>
+                    </button>
+                    <button class="btn btn-danger btn-bulk" onclick="bulkAction('ignore')" disabled>Ignore</button>
+                    <button class="btn btn-bulk chk-single" onclick="bulkAction('copy')" disabled>Copy Path</button>
+                    <button class="btn btn-bulk chk-single" onclick="bulkAction('reveal')" disabled>Reveal in Explorer</button>
+                {{end}}
+            </div>
+        </div>
+
+        <div class="glass-panel table-container">
+            <table id="secretsTable">
+                <thead>
+                    <tr>
+                        <th><input type="checkbox" id="selectAll"></th>
+                        <th>Hash (SHA-256)</th>
+                        <th class="sortable" onclick="sortTable(2)">Type <span class="sort-icon">↕</span></th>
+                        <th>Location</th>
+                        <th>Blast Radius</th>
+                        <th class="sortable" onclick="sortTable(5)">Entropy <span class="sort-icon">↕</span></th>
+                        <th class="sortable" onclick="sortTable(6)">Status <span class="sort-icon">↕</span></th>
+                        <th>Last Rotated</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{if .Credentials}}
+                        {{range .Credentials}}
+                        <tr>
+                            <td><input type="checkbox" class="row-check" data-hash="{{.Hash}}" data-path="{{.FilePath}}"></td>
+                            <td>{{.Hash}}</td>
+                            <td><span class="type-badge">{{.SecretType}}</span></td>
+                            <td>
+                                <div class="file-loc">{{.FilePath}}</div>
+                                <div style="font-size: 0.75rem; color: #64748b; margin-top: 4px;">Line {{.LineNumber}}</div>
+                            </td>
+                            <td>{{.BlastRadius}}</td>
+                            <td class="entropy">{{printf "%.2f" .EntropyScore}}</td>
+                            <td>
+                                <span class="status {{if eq .Status "Active"}}active{{else if eq .Status "Drift Detected"}}drift{{else}}needs-rotation{{end}}">
+                                    {{.Status}}
+                                </span>
+                            </td>
+                            <td>
+                                <div style="font-size: 0.85rem; color: #94a3b8;">{{.LastRotated}}</div>
+                            </td>
+                        </tr>
+                        {{end}}
+                    {{else}}
+                        <tr>
+                            <td colspan="8">
+                                <div class="empty-state">No credentials mapped in this view yet. Please configure a scan path!</div>
+                            </td>
+                        </tr>
+                    {{end}}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</body>
+</html>
