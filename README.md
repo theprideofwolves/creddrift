@@ -8,13 +8,13 @@ By operating with a native Go-powered engine and a local SQLite datastore, CredD
 
 CredDrift utilizes a decoupled local architecture. The environment primarily consists of a high-throughput Go backend, an embedded SQLite database for maintaining the historical state of secret drift, and a lightweight dashboard built on modern web standards.
 
-![System Architecture](architecture.png)
+![System Architecture](creddrift_architecture.svg)
 
 ### Operational Flow
 
 The engine enforces a strict state-machine workflow to analyze workspaces, identify high-risk strings, and catalog findings securely. The tool places the engineer at the center, requiring explicit acknowledgement and classification of discovered secrets.
 
-![Operational Flowchart](flowchart.png)
+![Operational Flowchart](creddrift_curvy_workflow.svg)
 
 ## Technical Capabilities
 
