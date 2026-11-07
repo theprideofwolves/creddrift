@@ -286,6 +286,9 @@ func (s *Store) Reconcile(root string, scanned []string, matches []scanner.Match
 			rows.Close()
 			return e
 		}
+		if !filepath.IsAbs(path) {
+			continue
+		} // Legacy relative locations have no trustworthy original root.
 		abs, e := filepath.Abs(path)
 		if e != nil {
 			rows.Close()

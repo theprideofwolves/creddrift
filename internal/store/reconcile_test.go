@@ -153,3 +153,25 @@ func TestLegacyDiscoveryTimestampIsNotRotation(t *testing.T) {
 		t.Fatal(history, e)
 	}
 }
+
+func TestLegacyRelativeLocationNeverProvesAbsence(t *testing.T) {
+	s, e := NewStore(filepath.Join(t.TempDir(), "db"))
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer s.Close()
+	if e = s.SaveMatch("synthetic-relative-only", "Generic", 3, "unknown-original-root.txt", 1); e != nil {
+		t.Fatal(e)
+	}
+	root, e := os.Getwd()
+	if e != nil {
+		t.Fatal(e)
+	}
+	if e = s.Reconcile(root, nil, nil, nil); e != nil {
+		t.Fatal(e)
+	}
+	rows, e := s.GetAllCredentials()
+	if e != nil || len(rows) != 1 {
+		t.Fatal("legacy relative evidence was incorrectly retired", rows, e)
+	}
+}
