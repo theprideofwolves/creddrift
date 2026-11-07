@@ -6,10 +6,13 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"net/url"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/varkuru/creddrift/config"
 	"github.com/varkuru/creddrift/internal/store"
@@ -21,6 +24,7 @@ var uiFiles embed.FS
 
 // StartServer begins listening on the given port and serving the CredDrift dashboard
 func StartServer(dbStore *store.Store, cfg *config.Config, s *scanner.SecretScanner, port string) {
+	var scanMu sync.Mutex
 	tmpl, err := template.ParseFS(uiFiles, "index.html")
 	if err != nil {
 		log.Fatalf("Failed to parse embedded UI templates: %v", err)
@@ -60,13 +64,20 @@ func StartServer(dbStore *store.Store, cfg *config.Config, s *scanner.SecretScan
 
 	http.HandleFunc("/api/set-path", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "POST" {
+			scanMu.Lock()
+			defer scanMu.Unlock()
 			path := r.FormValue("path")
 			if path != "" {
 				cfg.ScanTargets = []string{path}
 				matches, err := s.Scan()
-				if err == nil {
-					for _, m := range matches {
-						_ = dbStore.SaveMatch(m.MatchTxt, m.Type, m.Entropy, m.File, m.LineNum)
+				if err != nil {
+					http.Error(w, "Scan failed: "+err.Error(), http.StatusBadRequest)
+					return
+				}
+				for _, m := range matches {
+					if err := dbStore.SaveMatch(m.MatchTxt, m.Type, m.Entropy, m.File, m.LineNum); err != nil {
+						http.Error(w, "Unable to store scan", 500)
+						return
 					}
 				}
 			}
@@ -78,7 +89,10 @@ func StartServer(dbStore *store.Store, cfg *config.Config, s *scanner.SecretScan
 		if r.Method == "POST" {
 			for _, hash := range strings.Split(r.FormValue("hashes"), ",") {
 				if hash != "" {
-					_ = dbStore.MarkRotated(strings.TrimSpace(hash))
+					if err := dbStore.MarkRotated(strings.TrimSpace(hash)); err != nil {
+						http.Error(w, "Unable to update finding", 500)
+						return
+					}
 				}
 			}
 		}
@@ -89,7 +103,10 @@ func StartServer(dbStore *store.Store, cfg *config.Config, s *scanner.SecretScan
 		if r.Method == "POST" {
 			for _, hash := range strings.Split(r.FormValue("hashes"), ",") {
 				if hash != "" {
-					_ = dbStore.IgnoreSecret(strings.TrimSpace(hash))
+					if err := dbStore.IgnoreSecret(strings.TrimSpace(hash)); err != nil {
+						http.Error(w, "Unable to update finding", 500)
+						return
+					}
 				}
 			}
 		}
@@ -100,7 +117,10 @@ func StartServer(dbStore *store.Store, cfg *config.Config, s *scanner.SecretScan
 		if r.Method == "POST" {
 			for _, hash := range strings.Split(r.FormValue("hashes"), ",") {
 				if hash != "" {
-					_ = dbStore.RestoreSecret(strings.TrimSpace(hash))
+					if err := dbStore.RestoreSecret(strings.TrimSpace(hash)); err != nil {
+						http.Error(w, "Unable to update finding", 500)
+						return
+					}
 				}
 			}
 		}
@@ -113,7 +133,7 @@ func StartServer(dbStore *store.Store, cfg *config.Config, s *scanner.SecretScan
 			if paths != "" {
 				parts := strings.Split(paths, ",")
 				firstPath := strings.TrimSpace(parts[0])
-				
+
 				switch runtime.GOOS {
 				case "windows":
 					_ = exec.Command("explorer.exe", "/select,"+firstPath).Start()
@@ -152,7 +172,40 @@ func StartServer(dbStore *store.Store, cfg *config.Config, s *scanner.SecretScan
 	})
 
 	log.Printf("Web Dashboard starting on http://localhost%s", port)
-	if err := http.ListenAndServe(port, nil); err != nil {
+	if err := (&http.Server{Addr: "127.0.0.1" + port, Handler: localOnly(http.DefaultServeMux), ReadHeaderTimeout: 5 * time.Second}).ListenAndServe(); err != nil {
 		log.Fatalf("Server failed: %v", err)
 	}
+}
+
+// Require a loopback Host and a same-origin browser for local filesystem actions.
+func localOnly(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Host != "localhost:8080" && r.Host != "127.0.0.1:8080" {
+			http.Error(w, "Invalid host", http.StatusForbidden)
+			return
+		}
+		if origin := r.Header.Get("Origin"); origin != "" {
+			u, err := url.Parse(origin)
+			if err != nil || u.Scheme != "http" || u.Host != r.Host {
+				http.Error(w, "Invalid origin", http.StatusForbidden)
+				return
+			}
+		}
+		if strings.HasPrefix(r.URL.Path, "/api/") {
+			expected := http.MethodPost
+			if r.URL.Path == "/api/browse" {
+				expected = http.MethodGet
+			}
+			if r.Method != expected {
+				w.Header().Set("Allow", expected)
+				http.Error(w, "Method not allowed", 405)
+				return
+			}
+			if r.Header.Get("Sec-Fetch-Site") == "cross-site" {
+				http.Error(w, "Cross-site action blocked", 403)
+				return
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
 }

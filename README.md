@@ -36,10 +36,14 @@ The application scans configured targets at startup. Selecting a path in the das
 | `config/` | YAML configuration |
 
 ## Current scope
-Findings are candidates for review; the tool does not validate credentials with providers or rotate them automatically. Entropy scores describe matched strings rather than proving a credential is valid. Scan records use hashes rather than storing raw secret values in SQLite. Some dashboard queries hide records not seen within five minutes; this is not continuous background monitoring.
+Findings are candidates for review; the tool does not validate credentials with providers or rotate them automatically. Entropy scores describe matched strings rather than proving a credential is valid. Scan records use hashes rather than storing raw secret values in SQLite. Findings persist until reviewed; source-file deletions do not automatically reconcile stored locations. This is not continuous background monitoring.
 
-This is a local development tool. The HTTP listener currently binds to `:8080` without authentication, so restrict network access to the host while using it. Native folder selection requires the relevant desktop utilities.
+This is a local development tool. The HTTP listener binds to `127.0.0.1:8080`, checks local Host/Origin values, and restricts API methods. It has no user authentication. Native folder selection requires the relevant desktop utilities.
 
 ## Resume bullets
 - Built a Go secret-discovery tool that identifies potential AWS keys, GitHub tokens, and hardcoded credentials using pattern matching and Shannon entropy scoring, with file and line locations.
 - Implemented SHA-256 credential identities, SQLite location tracking, and a web dashboard to ignore, restore, and record manual rotation status for findings.
+
+
+## Interview demonstration and verification
+See [INTERVIEW.md](INTERVIEW.md) for a walkthrough, expected results, design decisions, and limitations. Run `go test ./...`, `go vet ./...`, and `go build ./...`. GitHub Actions also runs the race detector on Linux.

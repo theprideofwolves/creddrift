@@ -22,6 +22,7 @@ func NewStore(dbPath string) (*Store, error) {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 
+	db.SetMaxOpenConns(1)
 	if err := db.Ping(); err != nil {
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
@@ -184,10 +185,6 @@ func (s *Store) runQuery(query string) ([]Credential, error) {
 			return nil, err
 		}
 
-		if now.Sub(lastSeen).Minutes() > 5 {
-			continue // Hide stale/removed secrets automatically
-		}
-
 		c.LastRotated = lastRotated.Format("2006-01-02 15:04")
 
 		c.Status = "Active"
@@ -196,7 +193,7 @@ func (s *Store) runQuery(query string) ([]Credential, error) {
 		} else if now.Sub(lastRotated).Hours() > 24*90 {
 			c.Status = "Needs Rotation"
 		}
-		
+
 		creds = append(creds, c)
 	}
 	return creds, rows.Err()

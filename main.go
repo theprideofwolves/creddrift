@@ -42,7 +42,7 @@ func main() {
 	fmt.Printf("\nScan Complete. Found %d potential secrets.\n", len(matches))
 	for _, m := range matches {
 		fmt.Printf("[%s] Entropy: %.2f | File: %s:%d\n", m.Type, m.Entropy, m.File, m.LineNum)
-		
+
 		// Save to the database
 		err := dbStore.SaveMatch(m.MatchTxt, m.Type, m.Entropy, m.File, m.LineNum)
 		if err != nil {

@@ -61,11 +61,17 @@ func (s *SecretScanner) Scan() ([]Match, error) {
 
 			// Check and skip binary files
 			isBinary, err := isBinaryFile(path)
-			if err != nil || isBinary {
+			if err != nil {
+				return err
+			}
+			if isBinary {
 				return nil
 			}
 
-			matches, _ := s.scanFile(path)
+			matches, scanErr := s.scanFile(path)
+			if scanErr != nil {
+				return scanErr
+			}
 			results = append(results, matches...)
 			return nil
 		})
@@ -87,15 +93,16 @@ func (s *SecretScanner) scanFile(path string) ([]Match, error) {
 	var matches []Match
 	lineNum := 1
 	scanner := bufio.NewScanner(file)
+	scanner.Buffer(make([]byte, 64*1024), 1024*1024)
 
 	for scanner.Scan() {
 		line := scanner.Text()
 
-		if awsm := s.awsRegex.FindString(line); awsm != "" {
+		for _, awsm := range s.awsRegex.FindAllString(line, -1) {
 			matches = append(matches, Match{File: path, LineNum: lineNum, MatchTxt: awsm, Type: "AWS", Entropy: CalculateShannonEntropy(awsm)})
 		}
 
-		if ghm := s.ghRegex.FindString(line); ghm != "" {
+		for _, ghm := range s.ghRegex.FindAllString(line, -1) {
 			matches = append(matches, Match{File: path, LineNum: lineNum, MatchTxt: ghm, Type: "GitHub", Entropy: CalculateShannonEntropy(ghm)})
 		}
 
@@ -129,7 +136,7 @@ func isBinaryFile(path string) (bool, error) {
 	if err != nil && err.Error() != "EOF" {
 		return false, err
 	}
-	
+
 	// If it contains a null byte, consider it binary.
 	for i := 0; i < n; i++ {
 		if buf[i] == 0 {
