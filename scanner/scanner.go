@@ -2,11 +2,15 @@ package scanner
 
 import (
 	"bufio"
+	"context"
+	"errors"
+	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
 
-	"github.com/varkuru/creddrift/config"
+	"github.com/theprideofwolves/creddrift/config"
 )
 
 // Match represents a found potential secret.
@@ -20,10 +24,11 @@ type Match struct {
 
 // SecretScanner handles the file traversal and matching.
 type SecretScanner struct {
-	config   *config.Config
-	awsRegex *regexp.Regexp
-	ghRegex  *regexp.Regexp
-	genRegex *regexp.Regexp
+	ScannedFiles []string
+	config       *config.Config
+	awsRegex     *regexp.Regexp
+	ghRegex      *regexp.Regexp
+	genRegex     *regexp.Regexp
 }
 
 // NewScanner initializes a SecretScanner using the provided config.
@@ -37,12 +42,18 @@ func NewScanner(cfg *config.Config) *SecretScanner {
 }
 
 // Scan executes the directory walk and initiates file scanning.
-func (s *SecretScanner) Scan() ([]Match, error) {
+func (s *SecretScanner) Scan() ([]Match, error) { return s.ScanContext(context.Background()) }
+func (s *SecretScanner) ScanContext(ctx context.Context) ([]Match, error) {
+	s.ScannedFiles = nil
 	var results []Match
+	visited := 0
 
 	for _, target := range s.config.ScanTargets {
 		err := filepath.WalkDir(target, func(path string, d os.DirEntry, err error) error {
 			if err != nil {
+				return err
+			}
+			if err = ctx.Err(); err != nil {
 				return err
 			}
 
@@ -59,6 +70,23 @@ func (s *SecretScanner) Scan() ([]Match, error) {
 				return nil
 			}
 
+			if d.Type()&os.ModeSymlink != 0 {
+				return nil
+			}
+			if !d.Type().IsRegular() {
+				return nil
+			}
+			visited++
+			if visited > 50000 {
+				return fmt.Errorf("scan exceeds 50000 files; choose a smaller directory")
+			}
+			info, e := d.Info()
+			if e != nil {
+				return e
+			}
+			if info.Size() > 32<<20 {
+				return fmt.Errorf("file exceeds 32 MiB; scope incomplete")
+			}
 			// Check and skip binary files
 			isBinary, err := isBinaryFile(path)
 			if err != nil {
@@ -68,22 +96,26 @@ func (s *SecretScanner) Scan() ([]Match, error) {
 				return nil
 			}
 
-			matches, scanErr := s.scanFile(path)
+			matches, scanErr := s.scanFile(ctx, path)
 			if scanErr != nil {
 				return scanErr
 			}
+			s.ScannedFiles = append(s.ScannedFiles, path)
 			results = append(results, matches...)
+			if len(results) > 100000 {
+				return fmt.Errorf("scan exceeds 100000 candidates; narrow scope")
+			}
 			return nil
 		})
 		if err != nil {
 			return results, err
 		}
 	}
-	return results, nil
+	return results, ctx.Err()
 }
 
 // scanFile reads a text file line by line and looks for patterns.
-func (s *SecretScanner) scanFile(path string) ([]Match, error) {
+func (s *SecretScanner) scanFile(ctx context.Context, path string) ([]Match, error) {
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, err
@@ -96,6 +128,9 @@ func (s *SecretScanner) scanFile(path string) ([]Match, error) {
 	scanner.Buffer(make([]byte, 64*1024), 1024*1024)
 
 	for scanner.Scan() {
+		if e := ctx.Err(); e != nil {
+			return matches, e
+		}
 		line := scanner.Text()
 
 		for _, awsm := range s.awsRegex.FindAllString(line, -1) {
@@ -133,7 +168,7 @@ func isBinaryFile(path string) (bool, error) {
 
 	buf := make([]byte, 512)
 	n, err := file.Read(buf)
-	if err != nil && err.Error() != "EOF" {
+	if err != nil && !errors.Is(err, io.EOF) {
 		return false, err
 	}
 

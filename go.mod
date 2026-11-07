@@ -1,4 +1,4 @@
-module github.com/varkuru/creddrift
+module github.com/theprideofwolves/creddrift
 
 go 1.25.5
 

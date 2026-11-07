@@ -1,3 +1,12 @@
 creddrift.db
 test_secrets.env
 *.exe
+*.exe
+/dist/
+/release/
+/package-*/
+/coverage.out
+/creddrift
+*.db
+*.db-shm
+*.db-wal

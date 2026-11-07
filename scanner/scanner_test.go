@@ -1,7 +1,8 @@
 package scanner
 
 import (
-	"github.com/varkuru/creddrift/config"
+	"context"
+	"github.com/theprideofwolves/creddrift/config"
 	"os"
 	"path/filepath"
 	"strings"
@@ -41,5 +42,29 @@ func TestScanReportsLongLineError(t *testing.T) {
 	_, err := NewScanner(&config.Config{ScanTargets: []string{p}}).Scan()
 	if err == nil {
 		t.Fatal("silently accepted truncated scan")
+	}
+}
+func TestSymlinkIsOutsideCoverage(t *testing.T) {
+	root := t.TempDir()
+	outside := filepath.Join(t.TempDir(), "outside.txt")
+	if e := os.WriteFile(outside, []byte("password=synthetic-only"), 0600); e != nil {
+		t.Fatal(e)
+	}
+	if e := os.Symlink(outside, filepath.Join(root, "link.txt")); e != nil {
+		t.Skip("symlink privilege unavailable")
+	}
+	s := NewScanner(&config.Config{ScanTargets: []string{root}})
+	m, e := s.Scan()
+	if e != nil || len(m) != 0 || len(s.ScannedFiles) != 0 {
+		t.Fatal(m, e)
+	}
+}
+
+func TestCancelledScan(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	s := NewScanner(&config.Config{ScanTargets: []string{t.TempDir()}})
+	if _, e := s.ScanContext(ctx); e == nil {
+		t.Fatal("cancelled scan appeared complete")
 	}
 }

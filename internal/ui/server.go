@@ -1,211 +1,177 @@
-// internal/ui/server.go
 package ui
 
 import (
-	"embed"
+	"context"
+	"encoding/json"
+	"fmt"
+	"github.com/theprideofwolves/creddrift/config"
+	"github.com/theprideofwolves/creddrift/internal/desktop"
+	"github.com/theprideofwolves/creddrift/internal/store"
+	"github.com/theprideofwolves/creddrift/internal/ticket"
+	"github.com/theprideofwolves/creddrift/scanner"
 	"html/template"
-	"log"
 	"net/http"
-	"net/url"
-	"os/exec"
+	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/varkuru/creddrift/config"
-	"github.com/varkuru/creddrift/internal/store"
-	"github.com/varkuru/creddrift/scanner"
 )
 
-//go:embed index.html
-var uiFiles embed.FS
-
-// StartServer begins listening on the given port and serving the CredDrift dashboard
-func StartServer(dbStore *store.Store, cfg *config.Config, s *scanner.SecretScanner, port string) {
-	var scanMu sync.Mutex
-	tmpl, err := template.ParseFS(uiFiles, "index.html")
-	if err != nil {
-		log.Fatalf("Failed to parse embedded UI templates: %v", err)
+func Serve(db *store.Store, cfg *config.Config, s *scanner.SecretScanner, dir string) error {
+	tickets, e := ticket.Open(filepath.Join(dir, "tickets.json"))
+	if e != nil {
+		return e
 	}
-
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		view := r.URL.Query().Get("view")
-
-		var creds []store.Credential
-		var fetchErr error
-
-		if view == "ignored" {
-			creds, fetchErr = dbStore.GetIgnoredCredentials()
-		} else if view == "history" {
-			creds, fetchErr = dbStore.GetRotationHistory()
-		} else {
-			creds, fetchErr = dbStore.GetAllCredentials()
-		}
-
-		if fetchErr != nil {
-			http.Error(w, "Failed to fetch credentials", http.StatusInternalServerError)
-			return
-		}
-
-		data := struct {
-			Credentials []store.Credential
-			View        string
-		}{
-			Credentials: creds,
-			View:        view,
-		}
-
-		if err := tmpl.Execute(w, data); err != nil {
-			log.Printf("Template execution error: %v", err)
-		}
-	})
-
-	http.HandleFunc("/api/set-path", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "POST" {
-			scanMu.Lock()
-			defer scanMu.Unlock()
-			path := r.FormValue("path")
-			if path != "" {
-				cfg.ScanTargets = []string{path}
-				matches, err := s.Scan()
-				if err != nil {
-					http.Error(w, "Scan failed: "+err.Error(), http.StatusBadRequest)
-					return
-				}
-				for _, m := range matches {
-					if err := dbStore.SaveMatch(m.MatchTxt, m.Type, m.Entropy, m.File, m.LineNum); err != nil {
-						http.Error(w, "Unable to store scan", 500)
-						return
-					}
-				}
-			}
-		}
-		w.WriteHeader(http.StatusOK)
-	})
-
-	http.HandleFunc("/api/rotate", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "POST" {
-			for _, hash := range strings.Split(r.FormValue("hashes"), ",") {
-				if hash != "" {
-					if err := dbStore.MarkRotated(strings.TrimSpace(hash)); err != nil {
-						http.Error(w, "Unable to update finding", 500)
-						return
-					}
-				}
-			}
-		}
-		w.WriteHeader(http.StatusOK)
-	})
-
-	http.HandleFunc("/api/ignore", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "POST" {
-			for _, hash := range strings.Split(r.FormValue("hashes"), ",") {
-				if hash != "" {
-					if err := dbStore.IgnoreSecret(strings.TrimSpace(hash)); err != nil {
-						http.Error(w, "Unable to update finding", 500)
-						return
-					}
-				}
-			}
-		}
-		w.WriteHeader(http.StatusOK)
-	})
-
-	http.HandleFunc("/api/restore", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "POST" {
-			for _, hash := range strings.Split(r.FormValue("hashes"), ",") {
-				if hash != "" {
-					if err := dbStore.RestoreSecret(strings.TrimSpace(hash)); err != nil {
-						http.Error(w, "Unable to update finding", 500)
-						return
-					}
-				}
-			}
-		}
-		w.WriteHeader(http.StatusOK)
-	})
-
-	http.HandleFunc("/api/reveal", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "POST" {
-			paths := r.FormValue("paths")
-			if paths != "" {
-				parts := strings.Split(paths, ",")
-				firstPath := strings.TrimSpace(parts[0])
-
-				switch runtime.GOOS {
-				case "windows":
-					_ = exec.Command("explorer.exe", "/select,"+firstPath).Start()
-				case "darwin":
-					_ = exec.Command("open", "-R", firstPath).Start()
-				case "linux":
-					_ = exec.Command("xdg-open", filepath.Dir(firstPath)).Start()
-				}
-			}
-		}
-		w.WriteHeader(http.StatusOK)
-	})
-
-	http.HandleFunc("/api/browse", func(w http.ResponseWriter, r *http.Request) {
-		var cmd *exec.Cmd
-		switch runtime.GOOS {
-		case "windows":
-			cmd = exec.Command("powershell", "-NoProfile", "-Command", "Add-Type -AssemblyName System.windows.forms; $f = New-Object System.Windows.Forms.FolderBrowserDialog; if ($f.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { Write-Output $f.SelectedPath }")
-		case "darwin":
-			cmd = exec.Command("osascript", "-e", "POSIX path of (choose folder)")
-		case "linux":
-			cmd = exec.Command("zenity", "--file-selection", "--directory")
-		default:
-			http.Error(w, "Unsupported OS", http.StatusInternalServerError)
-			return
-		}
-
-		out, err := cmd.Output()
-		if err != nil {
-			http.Error(w, "Failed to browse", http.StatusInternalServerError)
-			return
-		}
-
-		w.Header().Set("Content-Type", "text/plain")
-		w.Write([]byte(strings.TrimSpace(string(out))))
-	})
-
-	log.Printf("Web Dashboard starting on http://localhost%s", port)
-	if err := (&http.Server{Addr: "127.0.0.1" + port, Handler: localOnly(http.DefaultServeMux), ReadHeaderTimeout: 5 * time.Second}).ListenAndServe(); err != nil {
-		log.Fatalf("Server failed: %v", err)
-	}
+	return desktop.Serve("CredDrift", dir, func(token string) http.Handler { return NewHandler(db, cfg, s, tickets, dir, token) })
 }
-
-// Require a loopback Host and a same-origin browser for local filesystem actions.
-func localOnly(next http.Handler) http.Handler {
+func NewHandler(db *store.Store, cfg *config.Config, s *scanner.SecretScanner, tickets *ticket.Store, dir, token string) http.Handler {
+	var mu sync.Mutex
+	message := "Choose a folder or run the synthetic demo. No scan runs automatically."
+	demo := false
+	tmpl := template.Must(template.New("page").Parse(strings.ReplaceAll(page, "STYLE", desktop.Style)))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Host != "localhost:8080" && r.Host != "127.0.0.1:8080" {
-			http.Error(w, "Invalid host", http.StatusForbidden)
+		mu.Lock()
+		defer mu.Unlock()
+		if r.URL.Path != "/" && r.URL.Path != "/export" {
+			http.NotFound(w, r)
 			return
 		}
-		if origin := r.Header.Get("Origin"); origin != "" {
-			u, err := url.Parse(origin)
-			if err != nil || u.Scheme != "http" || u.Host != r.Host {
-				http.Error(w, "Invalid origin", http.StatusForbidden)
+		if r.URL.Path == "/export" && r.Method != "GET" {
+			http.Error(w, "GET required", 405)
+			return
+		}
+		if r.Method == "POST" {
+			r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
+			if e := r.ParseForm(); e != nil {
+				http.Error(w, "Invalid request", 400)
 				return
+			}
+			if len(r.PostForm.Encode()) > 64<<10 {
+				http.Error(w, "Request too large", 400)
+				return
+			}
+			action := r.FormValue("action")
+			switch action {
+			case "scan", "demo":
+				root := strings.TrimSpace(r.FormValue("path"))
+				demo = action == "demo"
+				if demo {
+					root = filepath.Join(dir, "synthetic-demo")
+					if e := os.MkdirAll(root, 0700); e != nil {
+						message = e.Error()
+						break
+					}
+					if e := os.WriteFile(filepath.Join(root, "sample.txt"), []byte("password = synthetic-demo-only-abc123\n"), 0600); e != nil {
+						message = e.Error()
+						break
+					}
+				}
+				abs, e := filepath.Abs(root)
+				if e != nil || root == "" {
+					message = "Select a folder first."
+					break
+				}
+				info, e := os.Lstat(abs)
+				if e != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+					message = "Choose an existing real directory, not a symlink."
+					break
+				}
+				cfg.ScanTargets = []string{abs}
+				ctx, cancel := context.WithTimeout(r.Context(), 3*time.Minute)
+				matches, e := s.ScanContext(ctx)
+				cancel()
+				if e != nil {
+					message = "Scan incomplete; existing findings retained. Check unreadable files, 1 MiB line limit, 32 MiB file limit, and permissions. " + e.Error()
+					break
+				}
+				if e = db.Reconcile(abs, s.ScannedFiles, matches, cfg.IgnoreDirs); e != nil {
+					message = "Could not reconcile scan; transaction rolled back."
+					break
+				}
+				message = fmt.Sprintf("Complete: %d eligible text files, %d potential matches. Binary files, symlinks and ignored directories are outside coverage.", len(s.ScannedFiles), len(matches))
+			case "ignore", "restore", "rotate", "ticket":
+				hash := r.FormValue("hash")
+				all, e := db.GetAllCredentials()
+				if e != nil {
+					message = "Database unavailable"
+					break
+				}
+				ignored, e := db.GetIgnoredCredentials()
+				if e != nil {
+					message = "Database unavailable"
+					break
+				}
+				all = append(all, ignored...)
+				var selected *store.Credential
+				for i := range all {
+					if all[i].Hash == hash {
+						selected = &all[i]
+						break
+					}
+				}
+				if selected == nil {
+					message = "Finding not found in active observations."
+					break
+				}
+				switch action {
+				case "ignore":
+					e = db.IgnoreSecret(hash)
+				case "restore":
+					e = db.RestoreSecret(hash)
+				case "rotate":
+					e = db.MarkRotated(hash)
+				case "ticket":
+					demoPath := filepath.Join(dir, "synthetic-demo")
+					rel, err := filepath.Rel(demoPath, selected.FilePath)
+					isDemo := err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(os.PathSeparator))
+					if isDemo {
+						message = "Synthetic findings cannot create real Jira tickets."
+						break
+					}
+					body := fmt.Sprintf("Potential hardcoded credential candidate. Type: %s. Local finding ID: %s. Local recorded file count: %d. Reviewed at %s. Investigate and revoke/rotate through the provider if confirmed. No credential values, source snippets, or local file paths are included. This app does not validate or rotate provider credentials.", selected.SecretType, hash, selected.BlastRadius, time.Now().UTC().Format(time.RFC3339))
+					message, e = tickets.Handoff(r.Context(), ticket.Config{Origin: r.FormValue("jira"), Email: r.FormValue("email"), Token: r.FormValue("secret"), Project: r.FormValue("project"), Kind: r.FormValue("kind")}, "creddrift|"+hash, "Review potential hardcoded credential", body, r.FormValue("link"))
+				}
+				if e != nil {
+					message = e.Error()
+				} else if action != "ticket" {
+					message = "Review action recorded. Provider credentials were not changed."
+				}
+			default:
+				message = "Unsupported action"
 			}
 		}
-		if strings.HasPrefix(r.URL.Path, "/api/") {
-			expected := http.MethodPost
-			if r.URL.Path == "/api/browse" {
-				expected = http.MethodGet
-			}
-			if r.Method != expected {
-				w.Header().Set("Allow", expected)
-				http.Error(w, "Method not allowed", 405)
-				return
-			}
-			if r.Header.Get("Sec-Fetch-Site") == "cross-site" {
-				http.Error(w, "Cross-site action blocked", 403)
-				return
-			}
+		creds, e := db.GetAllCredentials()
+		if r.URL.Query().Get("view") == "ignored" {
+			creds, e = db.GetIgnoredCredentials()
 		}
-		next.ServeHTTP(w, r)
+		if r.URL.Query().Get("view") == "retired" {
+			creds, e = db.GetRetiredCredentials()
+		}
+		if r.URL.Query().Get("view") == "history" {
+			creds, e = db.GetRotationHistory()
+		}
+		if e != nil {
+			http.Error(w, "Cannot read findings", 500)
+			return
+		}
+		if r.URL.Path == "/export" {
+			if r.Method != "GET" {
+				http.Error(w, "GET required", 405)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("Content-Disposition", "attachment; filename=creddrift-findings.json")
+			json.NewEncoder(w).Encode(creds)
+			return
+		}
+		tmpl.Execute(w, struct {
+			Token, Message string
+			Credentials    []store.Credential
+			Tickets        map[string]ticket.Record
+			Demo           bool
+		}{token, message, creds, tickets.Records, demo})
 	})
 }
+
+const page = `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CredDrift</title><style>STYLE</style><h1>CredDrift</h1><p>Local credential discovery. Reviewed findings. Trustworthy rescans.</p><p class="notice">Finds potential credentials, not confirmed active keys. Entropy is a character statistic, not proof of password strength or validity. Raw candidates never appear in the UI or exports. Local file paths and hashes are sensitive; exports remain your responsibility.</p><p role="status">{{.Message}}</p><section><h2>Scan a directory</h2><form method="post" action="/?token={{.Token}}"><label>Absolute directory path<input name="path" placeholder="C:\projects\example"></label><button name="action" value="scan">Scan and reconcile</button><button name="action" value="demo">Run synthetic demo</button></form><p>Successful scans retire removed/moved occurrences only inside verified coverage. Failed scans retain earlier findings. Ignoring a candidate applies across all its locations.</p></section><nav><a href="/?token={{.Token}}">Active</a> | <a href="/?token={{.Token}}&view=ignored">Ignored</a> | <a href="/?token={{.Token}}&view=retired">Retired observations</a> | <a href="/?token={{.Token}}&view=history">User-recorded rotation actions</a> | <a href="/export?token={{.Token}}">Export active findings</a></nav><section><h2>Review findings</h2>{{range .Credentials}}<article><h3>{{.SecretType}} â€” {{.Status}}</h3><p>{{.FilePath}}:{{.LineNumber}}</p><small>ID: {{.Hash}}<br>Last observed: {{.LastSeen}}<br>Recorded files: {{.BlastRadius}} Â· Manual rotation action: {{.LastRotated}}</small><form method="post" action="/?token={{$.Token}}"><input type="hidden" name="hash" value="{{.Hash}}"><button name="action" value="ignore">Ignore candidate</button><button name="action" value="restore">Restore candidate</button><button name="action" value="rotate">Record my manual rotation action</button></form><details><summary>Review Jira disclosure and send</summary><form method="post" action="/?token={{$.Token}}"><input type="hidden" name="hash" value="{{.Hash}}"><p>Sends candidate type, ID, local file count and review time only. No raw credential, source snippet or path. API token is not saved. An uncertain create must be reconciled in Jira before another create.</p><section><h2>Jira handoff</h2><p>Review the selected record before sending. Sends only the disclosed finding/alert summary and correlation ID. Tokens are used for this request and never saved. Creates once; linked issues receive evidence comments. No automatic ticket closure. Inspect Jira before retrying an uncertain comment.</p><label>Jira origin<input name="jira" placeholder="https://team.atlassian.net" required></label><label>Email<input name="email" type="email" required autocomplete="off"></label><label>API token<input name="secret" type="password" required autocomplete="off"></label><label>Project<input name="project" placeholder="SEC"></label><label>Issue type<input name="kind" value="Task"></label><label>Existing key (optional; validates and links instead of creating)<input name="link" placeholder="SEC-123"></label><button name="action" value="ticket">Send reviewed record / link issue</button></section></form></details><hr></article>{{else}}<p>No findings in this view.</p>{{end}}</section><section><h2>Ticket delivery history</h2>{{range $id,$v:=.Tickets}}<p><small>{{$id}}: {{$v.Key}} ({{$v.State}})</small></p>{{else}}<p>No deliveries.</p>{{end}}</section><small>Single-user localhost tool. Legacy first-discovery timestamps are not presented as rotation. Close with Ctrl+C in the launcher. Findings and database backups must be protected.</small></html>`

@@ -1,49 +1,96 @@
 # CredDrift
-### Local secret discovery and finding triage
-Go security automation tool that scans local source files for potential credentials, tracks their locations in SQLite, and provides a web dashboard for reviewing findings.
 
-## What I built
-- Pattern matching for AWS access key IDs, GitHub classic personal access tokens, and `api_key` / `password` assignments, with file and line locations.
-- Shannon entropy scoring for matches; generic values with entropy at or below 3.5 are labeled `Weak_Secret`.
-- SHA-256 credential identities and SQLite records linking the same potential secret to multiple locations.
-- Dashboard actions to ignore findings, restore them, and record a manual rotation timestamp.
+A local Go secret-discovery and triage tool with SQLite, scope-aware rescans,
+redacted Jira handoff, and a bundled synthetic demo.
 
-## Workflow
-`config.yaml -> filesystem scan -> pattern matching and entropy -> SQLite -> dashboard`
+## Two focused capabilities
+1. Review potential hardcoded AWS IDs, classic GitHub tokens, and generic
+api_key/password assignments without exposing candidate values in the UI.
+2. Keep occurrence state accurate across successful rescans and track reviewed
+remediation in Jira without leaking source contents.
 
-![Architecture](creddrift_architecture.svg)
+Launch, choose an absolute folder, scan, inspect locations, ignore/restore
+candidates, and optionally record your own manual rotation action. The app does
+not contact providers to validate, revoke, or rotate credentials. Entropy is a
+character statistic; it is not proof of validity or password weakness.
 
-## Run locally
-Requires Go 1.25.5 or newer, matching `go.mod`. The project uses a Go SQLite driver; a separate SQLite server is not required.
+No automatic current-directory scan at startup. Default excluded directories:
+.git, node_modules, vendor, CredDrift. Binary files and symlinks are excluded.
+Limits: 50000 files, 32 MiB per file, 1 MiB per line, 100000 candidate matches.
+Exceeding a limit or encountering an unreadable file fails the scan and retains
+prior findings. Scans run synchronously with a three-minute cooperative deadline and request-cancellation checks between filesystem operations; there is no dedicated cancel button. A blocked OS filesystem read can delay cancellation. Choose a
+specific source directory instead of a whole filesystem.
 
-```bash
-git clone https://github.com/theprideofwolves/creddrift.git
-cd creddrift
-go mod download
-go build -o creddrift .
-```
+Successful reconciliation is transactional. It deactivates moved/deleted
+occurrences only within successful coverage, retains excluded/binary locations
+as historical observations, and reactivates candidates when they reappear.
+The active view is last-observed evidence, not a guarantee of current filesystem
+state. Full paths in exports are sensitive. File count means local occurrence
+count, not permissions or compromise blast radius.
 
-Edit `config.yaml` to choose scan targets and ignored directories, then run the binary from the repository directory. On Windows, run `.\creddrift.exe` after building with `-o creddrift.exe`; on macOS/Linux, run `./creddrift`. Open [the dashboard](http://localhost:8080).
+Raw candidate values are transient; SQLite stores SHA256 identities. Hashes are
+not encryption, and weak candidates remain guessable. Protect the database and
+backups. Existing SHA identities are retained for compatibility. No Git-history
+scan, provider validity test, dependency CVE scan, or verified rotation tracking.
 
-The application scans configured targets at startup. Selecting a path in the dashboard triggers another scan.
+## Existing users
+The new launcher uses the OS application-data directory. To carry an old
+creddrift.db forward, stop both versions, back it up, copy it into the new data
+directory, and launch. A migration adds an explicit manual-action timestamp;
+legacy discovery/rotation timestamps are not presented as verified rotation.
+Relative legacy locations should be reviewed and rescanned from an absolute
+path; they cannot be confidently reconciled across arbitrary working directories.
+The old config.yaml startup auto-scan is intentionally replaced by explicit UI scope.
 
-## Implementation
-| Component | Responsibility |
-| --- | --- |
-| `scanner/` | Directory traversal, binary-file skipping, matching, entropy |
-| `internal/store/` | Credential hashes, locations, ignore state, rotation timestamps |
-| `internal/ui/` | Embedded dashboard and HTTP actions |
-| `config/` | YAML configuration |
+## Installation and privacy
+Download the platform ZIP from GitHub Releases and extract it. On Windows,
+double-click the executable. On Linux, run the binary; if no desktop opener is
+installed, copy the printed localhost URL into a browser. No development tools,
+Docker, database server, or paid API is needed for the offline workflow.
+The executable is unsigned: OS warnings are possible. Close the application with
+Ctrl+C in its console. Closing the browser does not stop it.
 
-## Current scope
-Findings are candidates for review; the tool does not validate credentials with providers or rotate them automatically. Entropy scores describe matched strings rather than proving a credential is valid. Scan records use hashes rather than storing raw secret values in SQLite. Findings persist until reviewed; source-file deletions do not automatically reconcile stored locations. This is not continuous background monitoring.
+The server binds to an ephemeral localhost port and uses a private per-launch
+token, exact Host and Origin checks, CSP, HTML escaping and request limits.
+Single-user OS trust boundary: no roles or enterprise multi-tenancy. Local
+privileged processes can read memory and data. Do not expose it to a network.
+No telemetry, background uploads, automatic remediation or AI dependency.
 
-This is a local development tool. The HTTP listener binds to `127.0.0.1:8080`, checks local Host/Origin values, and restricts API methods. It has no user authentication. Native folder selection requires the relevant desktop utilities.
+Data defaults to the OS user configuration directory / application name.
+Set PORTFOLIO_DATA_DIR to change its parent; PORTFOLIO_NO_BROWSER=1 suppresses
+browser opening. Only one launcher may use a data directory. After a crash,
+confirm the process has stopped before removing application.lock.
+Stop the app before backup/restore. Replace executables to upgrade; user data
+stays separate. Uninstall by deleting extracted binaries; delete the data
+directory separately only if you intend to remove history.
 
-## Resume bullets
-- Built a Go secret-discovery tool that identifies potential AWS keys, GitHub tokens, and hardcoded credentials using pattern matching and Shannon entropy scoring, with file and line locations.
-- Implemented SHA-256 credential identities, SQLite location tracking, and a web dashboard to ignore, restore, and record manual rotation status for findings.
+## Release verification
+CI runs unit/integration tests, race detection, vet, and builds on Windows/Linux.
+Version tags publish portable ZIPs and SHA256 checksums after tests pass.
+Dependency metadata is included using go version -m; it is not a full license
+inventory or a signed supply-chain attestation. No unsupported scale or
+enterprise-certification claim is made.
 
+## Jira setup and delivery semantics
+Use Jira Cloud's HTTPS origin, an authorized account email/API token, project
+key, and a supported issue type (Task by default). Browse/Create/Comment
+permissions are required as appropriate. Projects with custom mandatory fields
+may reject creation: configure a suitable type or explicitly link an existing
+issue. The link action validates access to the issue, not the human's choice.
+Credentials are used only for the request and never saved in ticket history.
+No source snippets or raw credentials are sent. Review the disclosure before send.
 
-## Interview demonstration and verification
-See [INTERVIEW.md](INTERVIEW.md) for a walkthrough, expected results, design decisions, and limitations. Run `go test ./...`, `go vet ./...`, and `go build ./...`. GitHub Actions also runs the race detector on Linux.
+The app persists a create intent before contacting Jira. A missing/uncertain
+response blocks repeat creates: search Jira for the shown correlation ID, then
+link the existing key. Definitive 400/401/403/404/422 rejections may be corrected
+and retried. No automatic retry loops. Existing mappings receive evidence
+comments; an uncertain comment may have succeeded, so inspect Jira before retry.
+No automatic issue closure or bidirectional/background synchronization.
+Mappings are scoped to origin and local finding/alert ID. Losing local history
+or using a different origin breaks local deduplication: link existing work first.
+Live Jira permission/field compatibility requires actual authorized testing;
+TLS fake-server tests are not proof of live integration.
+
+## Developer checks
+`go test -race ./...`, `go vet ./...`, `go build ./.`.
+See architecture.md, interviewprep.md and explaining-each-decision-taken-over-others.md.
