@@ -10,3 +10,4 @@ test_secrets.env
 *.db
 *.db-shm
 *.db-wal
+*.exe~
