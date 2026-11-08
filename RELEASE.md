@@ -1,25 +1,23 @@
-# CredDrift: release scope and validation
+# CredDrift v1.2.1
 
-Portable single-user Windows/Linux release. See README for the two supported
-workflows, setup, data storage and important limitations.
+Portable single-user Windows/Linux directory secret discovery and triage: pattern
+matches, hashed SQLite identities, scope-aware rescans, ignore/restore/manual
+review actions, metadata export and optional reviewed Jira Cloud handoff.
 
-Automated gates: go test -race, go vet, Windows/Linux compilation, and package
-smoke checks. Feature tests cover documented state transitions, malformed input,
-boundary conditions, caps, and external failure contracts. No promise of every
-conceivable edge case.
+This patch removes unrelated project docs and test branches, unused upload/sample
+onboarding code, obsolete YAML loading and stale diagrams/spec claims. Native
+folder selection and its manual fallback remain. Launcher overrides are now
+CREDDRIFT_DATA_DIR (parent directory) and CREDDRIFT_NO_BROWSER. Default data
+locations and existing database/ticket formats are unchanged. Direct scan requests
+must use an absolute directory, matching setup guidance.
+Fixed retired view/export for candidates whose last active location was removed.
 
-Manual validation: live Slack/Jira permissions and delivery; human accessibility
-review; interactive first launch on a clean OS; long-running resource measurement;
-real user pilot. These remain distinct from unit tests and HTTP smoke checks.
+Automated gates include race-enabled Go tests, vet, Windows/Linux builds and
+packaged setup/demo/redaction/export/restart checks. Scanner/store tests cover
+coverage, rollback and review state; Jira contracts use TLS fake servers.
+Live Jira project permissions/custom fields, native OS dialogs, clean-machine
+interactive launch, human accessibility and sustained resource measurements
+remain separate validation. Tests do not establish enterprise deployment.
 
-Unsigned portable packages include dependency build metadata, not a full SBOM.
-Custom required Jira fields, provider credential vaulting, remote/shared deployment,
-automatic remediation and ServiceNow are outside this focused release.
-
-## v1.2.0 onboarding checks
-Welcome/own-data choice, offline first task, expected-result explanation, next-step
-panel, export, restart safety and remembered completion are exercised by the
-packaged smoke test on Windows/Linux. Unit tests cover read-only Jira outcomes,
-credential non-retention, field preservation, invalid setup requests, missing or
-corrupt preferences, folder checks and mocked native selection. A real native
-dialog and live AWS/Jira credentials still require manual validation.
+Packages are unsigned and include dependency build metadata and ZIP checksums.
+No developer tools, database server or paid API are needed for offline use.

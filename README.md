@@ -56,8 +56,8 @@ Single-user OS trust boundary: no roles or enterprise multi-tenancy. Local
 privileged processes can read memory and data. Do not expose it to a network.
 No telemetry, background uploads, automatic remediation or AI dependency.
 
-Data defaults to the OS user configuration directory / application name.
-Set PORTFOLIO_DATA_DIR to change its parent; PORTFOLIO_NO_BROWSER=1 suppresses
+Data defaults to the OS user configuration directory / CredDrift.
+Set CREDDRIFT_DATA_DIR to change its parent; CREDDRIFT_NO_BROWSER=1 suppresses
 browser opening. Only one launcher may use a data directory. After a crash,
 confirm the process has stopped before removing application.lock.
 Stop the app before backup/restore. Replace executables to upgrade; user data
@@ -86,7 +86,7 @@ link the existing key. Definitive 400/401/403/404/422 rejections may be correcte
 and retried. No automatic retry loops. Existing mappings receive evidence
 comments; an uncertain comment may have succeeded, so inspect Jira before retry.
 No automatic issue closure or bidirectional/background synchronization.
-Mappings are scoped to origin and local finding/alert ID. Losing local history
+Mappings are scoped to origin and local candidate hash. Losing local history
 or using a different origin breaks local deduplication: link existing work first.
 Live Jira permission/field compatibility requires actual authorized testing;
 TLS fake-server tests are not proof of live integration.
@@ -95,28 +95,27 @@ TLS fake-server tests are not proof of live integration.
 `go test -race ./...`, `go vet ./...`, `go build ./.`.
 See architecture.md, interviewprep.md and explaining-each-decision-taken-over-others.md.
 
-## Guided first run (v1.2.0)
+## Guided first run
 
-On a new installation, choose **Try the guided demo** or **Use my data**.
-The demo runs offline and explains its expected result. Setup checks are separate
-from scans/evaluations and never create tickets. After a successful task, the
-workspace shows the next step and remembers guide completion in onboarding.json.
-That file contains only a version and completion flag, never credentials.
-Use **Restart the guide** at any time; it does not reset existing reports.
-**Continue to existing workspace** opens saved work without rerunning a task.
+Choose **Try the guided demo** or **Use my data**. The offline demo writes a
+synthetic password fixture under the application's synthetic-demo directory and
+scans it. On a fresh workspace it produces one candidate with its value hidden.
+The demo uses the same local database; existing findings remain visible.
+Findings located in the demo directory cannot create real Jira tickets.
 
-Jira-enabled tools offer a read-only sign-in check against /rest/api/3/myself.
-This verifies authentication only, not project creation/comment permissions.
-The check does not retain email/API tokens. Re-enter credentials when sending
-a reviewed finding. The AWS setup check in S3 Auditor verifies account identity
-only; it does not claim bucket access is verified.
+For your own source, choose a folder using the native picker or paste an absolute
+directory path. The picker needs Windows PowerShell on Windows, osascript on
+macOS when building from source, or optional zenity on Linux. If unavailable or
+cancelled, paste the path. The readability check does not scan files. The chosen
+path is held for this session and prefilled in the scan form; scanning is explicit.
 
-CredDrift offers an explicit native folder picker, a readability check, and
-transfer of the selected path into the scan form. On Linux the optional picker
-uses zenity; if unavailable, paste an absolute path instead. Vanguard and LogFlow
-offer downloadable example inputs. Vanguard evaluation needs no connection;
-optional Slack remains a CLI feature and this guide never sends Slack messages.
+The optional Jira sign-in check calls GET /rest/api/3/myself. It checks identity,
+not project create/comment permissions, and never creates tickets or retains your
+email/API token. Re-enter credentials for a reviewed finding handoff.
 
-A corrupt/missing guide-preference file shows the guide again without changing
-application results. If progress cannot be saved, the guide says so; exports and
-existing domain data are not discarded. Setup is single-user and local.
+A successful scan and database reconciliation remember guide completion in
+onboarding.json, containing only a version and completion flag. Setup checks and
+failed scans do not mark completion. **Restart the guide** preserves findings;
+**Continue to existing workspace** opens saved work without scanning. Corrupt or
+missing guide preferences show the guide again. Progress-save failures are shown
+without discarding findings.

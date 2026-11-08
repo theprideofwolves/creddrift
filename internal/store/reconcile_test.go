@@ -67,6 +67,33 @@ func TestRescanMoveDeleteReappearAndScope(t *testing.T) {
 		t.Fatal(ignored)
 	}
 }
+func TestRetiredCandidateWithoutActiveLocations(t *testing.T) {
+	root := t.TempDir()
+	db, err := NewStore(filepath.Join(t.TempDir(), "db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	path := filepath.Join(root, "deleted.env")
+	if err := db.SaveMatch("synthetic-retired-only", "Generic", 3, path, 1); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Reconcile(root, nil, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := db.GetRetiredCredentials()
+	if err != nil || len(rows) != 1 || rows[0].BlastRadius != 0 || rows[0].Status != "Not observed in successful rescan (not provider revocation)" {
+		t.Fatal(rows, err)
+	}
+	if err := db.SaveMatch("synthetic-retired-only", "Generic", 3, path, 1); err != nil {
+		t.Fatal(err)
+	}
+	rows, err = db.GetRetiredCredentials()
+	if err != nil || len(rows) != 0 {
+		t.Fatal("reappearing location still retired", rows, err)
+	}
+}
+
 func TestIgnoredAndBinaryDoNotProveAbsence(t *testing.T) {
 	root := t.TempDir()
 	db, _ := NewStore(filepath.Join(t.TempDir(), "db"))

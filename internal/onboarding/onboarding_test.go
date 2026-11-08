@@ -3,6 +3,7 @@ package onboarding
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -12,6 +13,16 @@ import (
 	"strings"
 	"testing"
 )
+
+func TestPickerFailureKeepsManualPathAndDoesNotScan(t *testing.T) {
+	calls := 0
+	w := New(Config{Token: "t", Folder: true, Fields: []Field{{Name: "path", Default: "/previous"}}, Picker: func(context.Context) (string, error) { return "", errors.New("unavailable") }})
+	h := w.Wrap(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { calls++ }))
+	out := req(h, "POST", "/setup/check?token=t", url.Values{"check": {"browse"}, "path": {"/manual"}})
+	if out.Code != 200 || !strings.Contains(out.Body.String(), "Paste an absolute folder path instead") || w.Value("path") != "/manual" || calls != 0 || w.done {
+		t.Fatal(out.Body.String(), calls)
+	}
+}
 
 func req(h http.Handler, method, path string, form url.Values) *httptest.ResponseRecorder {
 	r := httptest.NewRequest(method, "http://localhost"+path, strings.NewReader(form.Encode()))
@@ -78,20 +89,16 @@ func TestSetupChecksAreNonDestructiveAndPrefill(t *testing.T) {
 		t.Fatal("picker ran task")
 	}
 }
-func TestRequestAndSampleBoundaries(t *testing.T) {
-	w := New(Config{Token: "t", Host: "localhost", Samples: []Sample{{"example.txt", "synthetic"}}})
+func TestRequestBoundaries(t *testing.T) {
+	w := New(Config{Token: "t", Host: "localhost"})
 	h := w.Wrap(http.HandlerFunc(func(out http.ResponseWriter, r *http.Request) { out.WriteHeader(204) }))
 	for _, tc := range []struct {
 		method, path string
 		code         int
-	}{{"GET", "/", 403}, {"DELETE", "/?token=t", 405}, {"GET", "/onboarding/start?token=t", 405}, {"GET", "/setup/check?token=t", 405}, {"POST", "/welcome?token=t", 405}, {"GET", "/onboarding/sample?token=t&name=../../secret", 404}} {
+	}{{"GET", "/", 403}, {"DELETE", "/?token=t", 405}, {"GET", "/onboarding/start?token=t", 405}, {"GET", "/setup/check?token=t", 405}, {"POST", "/welcome?token=t", 405}, {"POST", "/setup?token=t", 405}} {
 		if got := req(h, tc.method, tc.path, nil).Code; got != tc.code {
 			t.Fatalf("%s %s: %d", tc.method, tc.path, got)
 		}
-	}
-	out := req(h, "GET", "/onboarding/sample?token=t&name=example.txt", nil)
-	if out.Body.String() != "synthetic" || !strings.Contains(out.Header().Get("Content-Disposition"), "example.txt") {
-		t.Fatal(out)
 	}
 	if req(h, "POST", "/onboarding/start?token=t", url.Values{"mode": {"wrong"}}).Code != 400 {
 		t.Fatal("bad choice")
@@ -104,7 +111,7 @@ func TestRequestAndSampleBoundaries(t *testing.T) {
 	}
 	r := httptest.NewRequest("POST", "http://localhost/setup/check?token=t", nil)
 	r.Header.Set("Origin", "https://evil.test")
-	out = httptest.NewRecorder()
+	out := httptest.NewRecorder()
 	h.ServeHTTP(out, r)
 	if out.Code != 403 {
 		t.Fatal("origin")

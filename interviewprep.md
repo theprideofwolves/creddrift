@@ -1,61 +1,50 @@
 # CredDrift: interview study guide
 
 ## Explain it in 30 seconds
-Describe the two capabilities in README, show one input and its actual output,
-then state one limitation. Do not imply enterprise deployment or real users.
 
-## Two-minute walkthrough
-Trace launcher/CLI, validation, core logic, persistence/export and the explicit
-integration. Follow the functions named in architecture.md using actual source.
-Identify what is local, what is transmitted and which errors preserve old state.
+CredDrift scans an explicitly selected local source directory for potential
+hardcoded credentials, groups identical values by SHA256, and stores occurrence
+and review metadata in SQLite. Successful rescans reconcile moved/deleted
+locations; failed scans retain earlier evidence. A reviewed finding can be sent
+to Jira without disclosing the raw credential or source path.
 
-## Five-minute demo
-Launch the packaged binary; run the synthetic example; show the explanation and
-export. Demonstrate one failure. Explain what has and has not been tested live.
+## Trace the implementation
 
-## Questions to practice
-1. Why this input schema, and what is rejected?
-2. What is the exact boundary condition for a decision or status change?
-3. How are memory/concurrency bounded? Where could performance degrade?
-4. What happens after cancellation, read failure or disk-write failure?
-5. Which evidence is enough to support a conclusion, and which is not?
-6. What does a passing automated test establish about a live provider?
-7. Why not add ServiceNow, AI, or multi-tenancy immediately?
-8. How would you test migration and backup restore safely?
-9. How do local authorization and credential handling work?
-10. Explain a duplicate external write and why local transactions cannot prevent it alone.
+Follow main.go to the desktop launcher, onboarding setup, UI scan handler,
+scanner.ScanContext and store.Reconcile. Explain why scanning and reconciliation
+are separate and why a read failure cannot prove that an old secret disappeared.
+Then trace ignore/restore/manual-action updates and the Jira handoff guard.
 
-## Exercises
-Read the feature tests and predict a boundary-case output before running them.
-Introduce a failing test, explain its cause, repair it, and demonstrate the result.
-Reproduce the packaged demo on a machine without Go. Explain every limitation
-listed in README rather than memorizing a marketing description.
+## Questions and grounded answers
 
-## Honest contribution statement
-I used AI-assisted development to extend an existing Go tool, reviewed the
-workflow and implementation, and validated defined cases with automated tests.
-Replace this with specific actions you actually performed and can demonstrate.
-Documentation supports study; it cannot guarantee absence of knowledge gaps.
+1. What does detection prove? Only that a supported pattern matched. Entropy is
+   a character statistic; neither the pattern nor entropy validates a provider key.
+2. Why hash? To link repeated values without saving raw strings in SQLite.
+   Unsalted hashes of weak values are guessable and still require protection.
+3. What does recorded file count mean? Distinct active recorded paths for a hash,
+   not permissions, affected accounts or a confirmed compromise radius.
+4. What is drift here? Additional recorded locations and rescan reconciliation.
+   It is not monitoring provider credential changes or watching directories.
+5. What is rotation? A user-recorded action timestamp, not provider API evidence.
+   Legacy discovery timestamps are not migrated into verified rotation history.
+6. Why a transaction? A reconciliation error must roll back changes rather than
+   leave partially retired locations. Excluded and out-of-scope evidence stays.
+7. Why synchronous scanning? A small standalone UI and serialized mutations keep
+   local state simple. Long scans block other review actions; deadlines are cooperative.
+8. What does setup verify? Folder readability or Jira account identity only.
+   Neither runs a scan nor verifies Jira project create/comment permissions.
+9. How are duplicate Jira issues reduced? Persist intent before sending. If the
+   response is uncertain, inspect Jira and link its key. This is not exactly-once
+   delivery; comments can also succeed without a received response.
+10. What is shipped? A local Windows/Linux tool with automated regression and
+    package checks. Do not claim real users or production deployment without evidence.
 
-## Onboarding design and study notes
+## Practice with source
 
-The internal/onboarding package owns the welcome/setup routes, escaped progress
-panel, declared non-secret session fields, and a versioned completion preference.
-Core handlers explicitly call Complete only after a successful domain operation.
-A failing policy evaluation is still a successful task; a partial LogFlow report
-is not marked complete. Guide status is not a security/compliance conclusion.
+Read scanner_test.go, reconcile_test.go, server_test.go and ticket_test.go.
+Predict the result of moving/deleting a candidate, excluding a former location,
+an overlong line, ignoring a repeated value and an uncertain Jira response.
+Explain what stays local and why export paths/hashes remain sensitive.
 
-GET/sample/setup routes do not run scans or create tickets. POST setup checks
-use bounded read-only requests; Jira identity is not project authorization. Native
-folder selection is explicit, bounded and has a manual fallback. Preflight checks
-never store tokens, and Jira checks preserve previously selected local fields.
-
-Why not a JS tour library? Server-rendered forms and a small guide keep packaging
-light, work offline and are keyboard accessible. Each independent repository
-contains its own internal copy and tests; no cross-project service is required.
-That trades centralized updates for simpler standalone distribution.
-
-Practice: explain a fresh launch, a failed check, a successful demo, persistence
-after restart, and why restarting the guide cannot delete assessment data. Read
-onboarding_test.go and the packaged smoke script to distinguish a connection
-check from an end-to-end live integration test.
+For interviews, describe the AI assistance and the work you personally reviewed,
+tested and can explain. These notes support study; they cannot replace practice.

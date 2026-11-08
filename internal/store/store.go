@@ -165,7 +165,7 @@ type Credential struct {
 const baseSelect = `
 	SELECT c.hash, c.secret_type, c.entropy_score, c.rotation_recorded_at, l.file_path, l.line_number, c.last_seen,
 	(SELECT COUNT(DISTINCT file_path) FROM locations WHERE credential_id = c.id AND active_status=1),
-	(l.id > (SELECT MIN(id) FROM locations WHERE credential_id = c.id AND active_status=1))
+	COALESCE((l.id > (SELECT MIN(id) FROM locations WHERE credential_id = c.id AND active_status=1)), 0)
 `
 
 // GetAllCredentials fetches active secrets.

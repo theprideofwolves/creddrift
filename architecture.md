@@ -1,45 +1,49 @@
 # CredDrift: implemented architecture
 
-Launcher -> OS data directory -> SQLite schema upgrade -> protected local UI.
-User-selected root -> bounded file traversal -> patterns/entropy -> complete
-text-file coverage -> transactional occurrence reconciliation. Any scan error
-prevents reconciliation. Ignored identities apply across locations. Jira uses
-redacted type/hash/count/time and durable independent delivery records. A global
-UI mutex serializes scans/review actions. SQLite keeps one open connection.
-SHA256 identities preserve legacy compatibility but are not secret vaulting.
+```mermaid
+flowchart TD
+    A[Launcher and OS data directory] --> B[SQLite schema migration]
+    B --> C[Protected localhost UI]
+    C --> D[Explicit directory scan]
+    D --> E[Bounded traversal and pattern matching]
+    E --> F{Scan succeeded?}
+    F -->|No| G[Retain prior findings]
+    F -->|Yes| H[Transactional location reconciliation]
+    H --> I[Review and redacted JSON export]
+    I --> J[Explicit Jira handoff with durable intent]
+```
 
-## Operational boundaries
-Private single-user tool. Browser access requires the launcher token. No remote
-deployment, authentication roles, telemetry, continuous watch, or automatic
-containment. Data corruption stops load instead of silently overwriting history.
-Backups and third-party credentials remain the user's responsibility.
+## Source map
 
-## Tests and evidence
-Feature tests are alongside implementation, local-request tests in
-internal/desktop, and integration contract tests beside the adapters. CI verifies
-Windows/Linux builds and race checks. Mocks verify defined contracts; live
-permissions, provider behavior and clean-machine interactive UI require manual
-validation. Release packaging does not establish enterprise production readiness.
+- main.go opens the user-data database and declares default exclusions. Config
+  holds in-memory scan targets; no YAML file is read and no startup scan runs.
+- internal/desktop launches loopback HTTP with a random token/port, host/origin
+  guards, CSP and one data-directory launcher lock.
+- internal/onboarding provides demo/own-folder selection, native picker with
+  manual fallback, readability check and optional read-only Jira identity check.
+  Setup never scans; selected paths remain in session memory only.
+- internal/ui/server.go serializes scans and review actions through a mutex.
+  The scanner gets a cooperative three-minute deadline. A failed scan never
+  calls Reconcile. Complete guide progress is saved only after reconciliation.
+- scanner/scanner.go traverses explicit targets, applies exclusions, matches
+  supported patterns and calculates entropy. No provider API validates a match.
+- internal/store/store.go uses one SQLite connection, migrates manual-action
+  timestamps, hashes candidate values, and reconciles covered locations in a
+  transaction. Ignoring a hash applies across its locations. Exports are metadata.
+- internal/ticket stores create intent and delivery mappings separately in
+  tickets.json; it handles uncertain responses without blind automatic retries.
 
-## Onboarding design and study notes
+## State and boundaries
 
-The internal/onboarding package owns the welcome/setup routes, escaped progress
-panel, declared non-secret session fields, and a versioned completion preference.
-Core handlers explicitly call Complete only after a successful domain operation.
-A failing policy evaluation is still a successful task; a partial LogFlow report
-is not marked complete. Guide status is not a security/compliance conclusion.
+creddrift.db stores candidates, occurrences and review actions. onboarding.json
+contains a version/completion flag. Demo source lives under synthetic-demo and
+uses the same database as real scans; it does not clear existing findings.
+Restarting the guide never resets the database. Jira credentials are request-only.
+Candidate strings exist transiently during scanning; hashes are not encryption.
 
-GET/sample/setup routes do not run scans or create tickets. POST setup checks
-use bounded read-only requests; Jira identity is not project authorization. Native
-folder selection is explicit, bounded and has a manual fallback. Preflight checks
-never store tokens, and Jira checks preserve previously selected local fields.
-
-Why not a JS tour library? Server-rendered forms and a small guide keep packaging
-light, work offline and are keyboard accessible. Each independent repository
-contains its own internal copy and tests; no cross-project service is required.
-That trades centralized updates for simpler standalone distribution.
-
-Practice: explain a fresh launch, a failed check, a successful demo, persistence
-after restart, and why restarting the guide cannot delete assessment data. Read
-onboarding_test.go and the packaged smoke script to distinguish a connection
-check from an end-to-end live integration test.
+This is a local single-user tool. No network deployment, shared authentication,
+provider rotation, continuous monitoring or enterprise deployment is established.
+Scopes are observations of a changing filesystem, not an atomic filesystem snapshot.
+Tests cover state transitions, redaction, reconciliation failures, local request
+guards, mocked Jira contracts and packaged launch/demo/export/restart flows.
+Live Jira permissions and native-picker behavior require separate validation.
