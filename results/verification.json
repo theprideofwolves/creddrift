@@ -1,0 +1,429 @@
+{
+  "revision": "da45283799237a0dca91aa51ccd73aacd1ede3f4",
+  "recorded_at_utc": "2026-11-10T15:56:06.302729+00:00",
+  "go": "go version go1.25.5 windows/amd64",
+  "gates": {
+    "race_tests": "pass",
+    "vet": "pass",
+    "root_build": "pass",
+    "packaged_smoke": "pass",
+    "synthetic_evaluation": "pass"
+  },
+  "statement_coverage_percent": 71.9,
+  "top_level_passed": 43,
+  "top_level_skipped": 2,
+  "packages": [
+    {
+      "package": "github.com/theprideofwolves/creddrift",
+      "outcome": "pass"
+    },
+    {
+      "package": "github.com/theprideofwolves/creddrift/config",
+      "outcome": "skip"
+    },
+    {
+      "package": "github.com/theprideofwolves/creddrift/internal/desktop",
+      "outcome": "pass"
+    },
+    {
+      "package": "github.com/theprideofwolves/creddrift/internal/ui",
+      "outcome": "pass"
+    },
+    {
+      "package": "github.com/theprideofwolves/creddrift/internal/ticket",
+      "outcome": "pass"
+    },
+    {
+      "package": "github.com/theprideofwolves/creddrift/internal/onboarding",
+      "outcome": "pass"
+    },
+    {
+      "package": "github.com/theprideofwolves/creddrift/cmd/evaluate",
+      "outcome": "pass"
+    },
+    {
+      "package": "github.com/theprideofwolves/creddrift/internal/store",
+      "outcome": "pass"
+    },
+    {
+      "package": "github.com/theprideofwolves/creddrift/scanner",
+      "outcome": "pass"
+    }
+  ],
+  "tests": [
+    {
+      "package": "github.com/theprideofwolves/creddrift/internal/desktop",
+      "test": "TestCredDriftDataDirectoryOverride",
+      "outcome": "pass",
+      "seconds": 0
+    },
+    {
+      "package": "github.com/theprideofwolves/creddrift/internal/desktop",
+      "test": "TestRequestBoundaries/allowed",
+      "outcome": "pass",
+      "seconds": 0
+    },
+    {
+      "package": "github.com/theprideofwolves/creddrift/internal/desktop",
+      "test": "TestRequestBoundaries/missing_token",
+      "outcome": "pass",
+      "seconds": 0
+    },
+    {
+      "package": "github.com/theprideofwolves/creddrift/internal/desktop",
+      "test": "TestRequestBoundaries/foreign_host",
+      "outcome": "pass",
+      "seconds": 0
+    },
+    {
+      "package": "github.com/theprideofwolves/creddrift/internal/desktop",
+      "test": "TestRequestBoundaries/foreign_origin",
+      "outcome": "pass",
+      "seconds": 0
+    },
+    {
+      "package": "github.com/theprideofwolves/creddrift/internal/desktop",
+      "test": "TestRequestBoundaries/method",
+      "outcome": "pass",
+      "seconds": 0
+    },
+    {
+      "package": "github.com/theprideofwolves/creddrift/internal/desktop",
+      "test": "TestRequestBoundaries",
+      "outcome": "pass",
+      "seconds": 0
+    },
+    {
+      "package": "github.com/theprideofwolves/creddrift/internal/desktop",
+      "test": "TestThemePreferenceAndSafeReturn",
+      "outcome": "pass",
+      "seconds": 0
+    },
+    {
+      "package": "github.com/theprideofwolves/creddrift/internal/ui",
+      "test": "TestOwnFolderScanFailureAndReconciliation",
+      "outcome": "pass",
+      "seconds": 0.2
+    },
+    {
+      "package": "github.com/theprideofwolves/creddrift/scanner",
+      "test": "TestEmptyMissingAndOversizedScopes",
+      "outcome": "pass",
+      "seconds": 0.01
+    },
+    {
+      "package": "github.com/theprideofwolves/creddrift/internal/ui",
+      "test": "TestDemoAndRedaction",
+      "outcome": "pass",
+      "seconds": 0.11
+    },
+    {
+      "package": "github.com/theprideofwolves/creddrift/internal/ui",
+      "test": "TestSetupFolderPrefillsWithoutScanning",
+      "outcome": "pass",
+      "seconds": 0.08
+    },
+    {
+      "package": "github.com/theprideofwolves/creddrift/internal/ui",
+      "test": "TestDemoIdentityCannotHandoffFromAnotherLocation",
+      "outcome": "pass",
+      "seconds": 0.16
+    },
+    {
+      "package": "github.com/theprideofwolves/creddrift/internal/ui",
+      "test": "TestCancelledRescanRetainsEvidence",
+      "outcome": "pass",
+      "seconds": 0.11
+    },
+    {
+      "package": "github.com/theprideofwolves/creddrift/internal/ticket",
+      "test": "TestEquivalentOriginsCannotDuplicateCreate",
+      "outcome": "pass",
+      "seconds": 0.01
+    },
+    {
+      "package": "github.com/theprideofwolves/creddrift/internal/ticket",
+      "test": "TestLegacyOriginMappingIsPreserved",
+      "outcome": "pass",
+      "seconds": 0.03
+    },
+    {
+      "package": "github.com/theprideofwolves/creddrift/internal/ui",
+      "test": "TestViewExportLinksAndEmptyArray",
+      "outcome": "pass",
+      "seconds": 0.12
+    },
+    {
+      "package": "github.com/theprideofwolves/creddrift/internal/ticket",
+      "test": "TestHandoffFailureMatrix/created",
+      "outcome": "pass",
+      "seconds": 0.04
+    },
+    {
+      "package": "github.com/theprideofwolves/creddrift/internal/ticket",
+      "test": "TestHandoffFailureMatrix/invalid_reply",
+      "outcome": "pass",
+      "seconds": 0.03
+    },
+    {
+      "package": "github.com/theprideofwolves/creddrift/internal/ui",
+      "test": "TestThemeAcrossWelcomeSetupAndWorkspace",
+      "outcome": "pass",
+      "seconds": 0.07
+    },
+    {
+      "package": "github.com/theprideofwolves/creddrift/internal/ticket",
+      "test": "TestHandoffFailureMatrix/permission",
+      "outcome": "pass",
+      "seconds": 0.04
+    },
+    {
+      "package": "github.com/theprideofwolves/creddrift/internal/ticket",
+      "test": "TestHandoffFailureMatrix/rate_limit",
+      "outcome": "pass",
+      "seconds": 0.03
+    },
+    {
+      "package": "github.com/theprideofwolves/creddrift/internal/ticket",
+      "test": "TestHandoffFailureMatrix/server",
+      "outcome": "pass",
+      "seconds": 0.04
+    },
+    {
+      "package": "github.com/theprideofwolves/creddrift/internal/ticket",
+      "test": "TestHandoffFailureMatrix",
+      "outcome": "pass",
+      "seconds": 0.19
+    },
+    {
+      "package": "github.com/theprideofwolves/creddrift/internal/ticket",
+      "test": "TestLinkValidationAndRedirection",
+      "outcome": "pass",
+      "seconds": 0
+    },
+    {
+      "package": "github.com/theprideofwolves/creddrift/internal/ticket",
+      "test": "TestCorruptAndUnwritableState",
+      "outcome": "pass",
+      "seconds": 0.01
+    },
+    {
+      "package": "github.com/theprideofwolves/creddrift/internal/ticket",
+      "test": "TestLostReplyAndRedirect",
+      "outcome": "pass",
+      "seconds": 0.04
+    },
+    {
+      "package": "github.com/theprideofwolves/creddrift/internal/ticket",
+      "test": "TestAtomicSave",
+      "outcome": "pass",
+      "seconds": 0.01
+    },
+    {
+      "package": "github.com/theprideofwolves/creddrift/internal/onboarding",
+      "test": "TestPickerFailureKeepsManualPathAndDoesNotScan",
+      "outcome": "pass",
+      "seconds": 0
+    },
+    {
+      "package": "github.com/theprideofwolves/creddrift/internal/onboarding",
+      "test": "TestFirstRunChoiceAndPersistence",
+      "outcome": "pass",
+      "seconds": 0.01
+    },
+    {
+      "package": "github.com/theprideofwolves/creddrift/internal/onboarding",
+      "test": "TestSetupChecksAreNonDestructiveAndPrefill",
+      "outcome": "pass",
+      "seconds": 0
+    },
+    {
+      "package": "github.com/theprideofwolves/creddrift/internal/onboarding",
+      "test": "TestRequestBoundaries",
+      "outcome": "pass",
+      "seconds": 0
+    },
+    {
+      "package": "github.com/theprideofwolves/creddrift/internal/onboarding",
+      "test": "TestJiraReadOnlyAndNoCredentialRetention/\u00c8",
+      "outcome": "pass",
+      "seconds": 0.02
+    },
+    {
+      "package": "github.com/theprideofwolves/creddrift/internal/onboarding",
+      "test": "TestJiraReadOnlyAndNoCredentialRetention/\u00c8#01",
+      "outcome": "pass",
+      "seconds": 0.01
+    },
+    {
+      "package": "github.com/theprideofwolves/creddrift/internal/onboarding",
+      "test": "TestJiraReadOnlyAndNoCredentialRetention/\u0191",
+      "outcome": "pass",
+      "seconds": 0.01
+    },
+    {
+      "package": "github.com/theprideofwolves/creddrift/internal/onboarding",
+      "test": "TestJiraReadOnlyAndNoCredentialRetention/\u0193",
+      "outcome": "pass",
+      "seconds": 0.02
+    },
+    {
+      "package": "github.com/theprideofwolves/creddrift/internal/onboarding",
+      "test": "TestJiraReadOnlyAndNoCredentialRetention/\u01ad",
+      "outcome": "pass",
+      "seconds": 0.01
+    },
+    {
+      "package": "github.com/theprideofwolves/creddrift/internal/onboarding",
+      "test": "TestJiraReadOnlyAndNoCredentialRetention/\u01f7",
+      "outcome": "pass",
+      "seconds": 0.01
+    },
+    {
+      "package": "github.com/theprideofwolves/creddrift/internal/onboarding",
+      "test": "TestJiraReadOnlyAndNoCredentialRetention/\u012e",
+      "outcome": "pass",
+      "seconds": 0.01
+    },
+    {
+      "package": "github.com/theprideofwolves/creddrift/internal/onboarding",
+      "test": "TestJiraReadOnlyAndNoCredentialRetention",
+      "outcome": "pass",
+      "seconds": 0.1
+    },
+    {
+      "package": "github.com/theprideofwolves/creddrift/internal/onboarding",
+      "test": "TestFolderAndPreferenceFailures",
+      "outcome": "pass",
+      "seconds": 0.01
+    },
+    {
+      "package": "github.com/theprideofwolves/creddrift/cmd/evaluate",
+      "test": "TestEvaluationReportIsRedacted",
+      "outcome": "pass",
+      "seconds": 0.15
+    },
+    {
+      "package": "github.com/theprideofwolves/creddrift/internal/store",
+      "test": "TestExcludedDirectoryNameIsNotExcludedFile",
+      "outcome": "pass",
+      "seconds": 0.09
+    },
+    {
+      "package": "github.com/theprideofwolves/creddrift/internal/store",
+      "test": "TestReconcileRejectsOutOfScopeCoverage",
+      "outcome": "pass",
+      "seconds": 0.06
+    },
+    {
+      "package": "github.com/theprideofwolves/creddrift/internal/store",
+      "test": "TestSymlinkAncestorRetainsEvidence",
+      "outcome": "skip",
+      "seconds": 0
+    },
+    {
+      "package": "github.com/theprideofwolves/creddrift/internal/store",
+      "test": "TestRescanMoveDeleteReappearAndScope",
+      "outcome": "pass",
+      "seconds": 0.18
+    },
+    {
+      "package": "github.com/theprideofwolves/creddrift/internal/store",
+      "test": "TestRetiredCandidateWithoutActiveLocations",
+      "outcome": "pass",
+      "seconds": 0.09
+    },
+    {
+      "package": "github.com/theprideofwolves/creddrift/internal/store",
+      "test": "TestIgnoredAndBinaryDoNotProveAbsence",
+      "outcome": "pass",
+      "seconds": 0.09
+    },
+    {
+      "package": "github.com/theprideofwolves/creddrift/internal/store",
+      "test": "TestScanErrorDoesNotReconcile",
+      "outcome": "pass",
+      "seconds": 0.1
+    },
+    {
+      "package": "github.com/theprideofwolves/creddrift/internal/store",
+      "test": "TestReconcileRollsBackInvalidCoverage",
+      "outcome": "pass",
+      "seconds": 0.07
+    },
+    {
+      "package": "github.com/theprideofwolves/creddrift/internal/store",
+      "test": "TestLegacyDiscoveryTimestampIsNotRotation",
+      "outcome": "pass",
+      "seconds": 0.12
+    },
+    {
+      "package": "github.com/theprideofwolves/creddrift/internal/store",
+      "test": "TestLegacyRelativeLocationNeverProvesAbsence",
+      "outcome": "pass",
+      "seconds": 0.07
+    },
+    {
+      "package": "github.com/theprideofwolves/creddrift/internal/store",
+      "test": "TestFindingLifecycle",
+      "outcome": "pass",
+      "seconds": 0.11
+    },
+    {
+      "package": "github.com/theprideofwolves/creddrift/internal/store",
+      "test": "TestEvidenceLifecycleAndRestart",
+      "outcome": "pass",
+      "seconds": 0.18
+    },
+    {
+      "package": "github.com/theprideofwolves/creddrift/internal/store",
+      "test": "TestCoverageReasonsAndIdentityFilter",
+      "outcome": "pass",
+      "seconds": 0.09
+    },
+    {
+      "package": "github.com/theprideofwolves/creddrift/scanner",
+      "test": "TestFileCountLimit",
+      "outcome": "pass",
+      "seconds": 51.31
+    },
+    {
+      "package": "github.com/theprideofwolves/creddrift/scanner",
+      "test": "TestPatternBoundariesAndAssignmentVariants",
+      "outcome": "pass",
+      "seconds": 0.01
+    },
+    {
+      "package": "github.com/theprideofwolves/creddrift/scanner",
+      "test": "TestCandidateLimitStopsWithinFile",
+      "outcome": "pass",
+      "seconds": 5.71
+    },
+    {
+      "package": "github.com/theprideofwolves/creddrift/scanner",
+      "test": "TestPatternsLocationsAndIgnoredFiles",
+      "outcome": "pass",
+      "seconds": 0.02
+    },
+    {
+      "package": "github.com/theprideofwolves/creddrift/scanner",
+      "test": "TestScanReportsLongLineError",
+      "outcome": "pass",
+      "seconds": 0.02
+    },
+    {
+      "package": "github.com/theprideofwolves/creddrift/scanner",
+      "test": "TestSymlinkIsOutsideCoverage",
+      "outcome": "skip",
+      "seconds": 0
+    },
+    {
+      "package": "github.com/theprideofwolves/creddrift/scanner",
+      "test": "TestCancelledScan",
+      "outcome": "pass",
+      "seconds": 0
+    }
+  ],
+  "manual_checks": "not performed; see TESTING.md",
+  "live_integrations": "not performed; Jira tests are local mocks"
+}

@@ -1,0 +1,191 @@
+{
+  "Dataset": "synthetic-v1",
+  "CorpusSHA256": "c04143bb0b139f8fa7f101a3dd2d2446395e4dd21c4c2bb21b770393be1d0bfe",
+  "Revision": "da45283799237a0dca91aa51ccd73aacd1ede3f4",
+  "Go": "go1.25.5",
+  "OS": "windows",
+  "Arch": "amd64",
+  "Cases": 20,
+  "TP": 8,
+  "FP": 3,
+  "FN": 2,
+  "Precision": 0.7272727272727273,
+  "Recall": 0.8,
+  "CaseResults": [
+    {
+      "ID": "aws-bare",
+      "Expected": 1,
+      "Detected": 1,
+      "TP": 1,
+      "FP": 0,
+      "FN": 0
+    },
+    {
+      "ID": "aws-assignment",
+      "Expected": 1,
+      "Detected": 1,
+      "TP": 1,
+      "FP": 0,
+      "FN": 0
+    },
+    {
+      "ID": "github-bare",
+      "Expected": 1,
+      "Detected": 1,
+      "TP": 1,
+      "FP": 0,
+      "FN": 0
+    },
+    {
+      "ID": "github-comment",
+      "Expected": 1,
+      "Detected": 1,
+      "TP": 1,
+      "FP": 0,
+      "FN": 0
+    },
+    {
+      "ID": "generic-unquoted",
+      "Expected": 1,
+      "Detected": 1,
+      "TP": 1,
+      "FP": 0,
+      "FN": 0
+    },
+    {
+      "ID": "generic-single-quoted",
+      "Expected": 1,
+      "Detected": 1,
+      "TP": 1,
+      "FP": 0,
+      "FN": 0
+    },
+    {
+      "ID": "generic-double-quoted",
+      "Expected": 1,
+      "Detected": 1,
+      "TP": 1,
+      "FP": 0,
+      "FN": 0
+    },
+    {
+      "ID": "generic-uppercase",
+      "Expected": 1,
+      "Detected": 1,
+      "TP": 1,
+      "FP": 0,
+      "FN": 0
+    },
+    {
+      "ID": "json-password",
+      "Expected": 1,
+      "Detected": 0,
+      "TP": 0,
+      "FP": 0,
+      "FN": 1
+    },
+    {
+      "ID": "quoted-space",
+      "Expected": 1,
+      "Detected": 1,
+      "TP": 0,
+      "FP": 1,
+      "FN": 1
+    },
+    {
+      "ID": "ordinary-text",
+      "Expected": 0,
+      "Detected": 0,
+      "TP": 0,
+      "FP": 0,
+      "FN": 0
+    },
+    {
+      "ID": "empty-assignment",
+      "Expected": 0,
+      "Detected": 0,
+      "TP": 0,
+      "FP": 0,
+      "FN": 0
+    },
+    {
+      "ID": "empty-quotes",
+      "Expected": 0,
+      "Detected": 0,
+      "TP": 0,
+      "FP": 0,
+      "FN": 0
+    },
+    {
+      "ID": "aws-too-long",
+      "Expected": 0,
+      "Detected": 0,
+      "TP": 0,
+      "FP": 0,
+      "FN": 0
+    },
+    {
+      "ID": "aws-too-short",
+      "Expected": 0,
+      "Detected": 0,
+      "TP": 0,
+      "FP": 0,
+      "FN": 0
+    },
+    {
+      "ID": "github-too-long",
+      "Expected": 0,
+      "Detected": 0,
+      "TP": 0,
+      "FP": 0,
+      "FN": 0
+    },
+    {
+      "ID": "github-too-short",
+      "Expected": 0,
+      "Detected": 0,
+      "TP": 0,
+      "FP": 0,
+      "FN": 0
+    },
+    {
+      "ID": "nonsecret-placeholder",
+      "Expected": 0,
+      "Detected": 1,
+      "TP": 0,
+      "FP": 1,
+      "FN": 0
+    },
+    {
+      "ID": "suffix-key",
+      "Expected": 0,
+      "Detected": 1,
+      "TP": 0,
+      "FP": 1,
+      "FN": 0
+    },
+    {
+      "ID": "unrelated-key",
+      "Expected": 0,
+      "Detected": 0,
+      "TP": 0,
+      "FP": 0,
+      "FN": 0
+    }
+  ],
+  "Performance": {
+    "Files": 1000,
+    "Bytes": 65536000,
+    "MatchesPerTrial": 100,
+    "Milliseconds": [
+      7102.087,
+      6520.556,
+      6486.448,
+      6641.741,
+      6754.8
+    ],
+    "MedianMilliseconds": 6641.741,
+    "MedianMiBPerSecond": 9.410183263695469,
+    "Method": "scanner only; 1000 generated 64-KiB files; 100 candidate occurrences; one unreported warm-up then five sequential trials; fixture creation, SQLite, UI and process startup excluded; filesystem cache not flushed; not peak-memory measurement"
+  }
+}

@@ -55,4 +55,4 @@ python .github/scripts/smoke.py ./creddrift
 
 Use `creddrift.exe` on Windows. Tests use synthetic folders and local Jira mocks; live Jira compatibility requires separate testing.
 
-[Interview walkthrough](interviewprep.md) · [Manual checklist](TESTING.md) · [Coverage and limits](spec.md) · [Implementation](architecture.md) · [Data, upgrades and Jira details](OPERATIONS.md)
+[Measured results](RESULTS.md) Â· [Measured results](RESULTS.md) · [Interview walkthrough](interviewprep.md) Ã‚Â· [Manual checklist](TESTING.md) Ã‚Â· [Coverage and limits](spec.md) Ã‚Â· [Implementation](architecture.md) Ã‚Â· [Data, upgrades and Jira details](OPERATIONS.md)
