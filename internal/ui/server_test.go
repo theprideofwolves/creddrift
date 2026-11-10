@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"context"
 	"encoding/json"
 	"github.com/theprideofwolves/creddrift/config"
 	"github.com/theprideofwolves/creddrift/internal/store"
@@ -10,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -173,5 +175,165 @@ func TestSetupFolderPrefillsWithoutScanning(t *testing.T) {
 	h.ServeHTTP(out, httptest.NewRequest("GET", "http://localhost/?token=token", nil))
 	if !strings.Contains(out.Body.String(), source) {
 		t.Fatal("selected folder not prefilled")
+	}
+}
+
+func TestDemoIdentityCannotHandoffFromAnotherLocation(t *testing.T) {
+	dir := t.TempDir()
+	db, err := store.NewStore(filepath.Join(dir, "db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	tickets, err := ticket.Open(filepath.Join(dir, "tickets.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Insert the external occurrence first so it is selected before the demo occurrence.
+	if err := db.SaveMatch("synthetic-demo-only-abc123", "Generic", 4, filepath.Join(t.TempDir(), "copy.txt"), 1); err != nil {
+		t.Fatal(err)
+	}
+	cfg := &config.Config{}
+	h := NewHandler(db, cfg, scanner.NewScanner(cfg), tickets, dir, "token")
+	post := func(form url.Values) string {
+		r := httptest.NewRequest("POST", "http://localhost/?token=token", strings.NewReader(form.Encode()))
+		r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		out := httptest.NewRecorder()
+		h.ServeHTTP(out, r)
+		return out.Body.String()
+	}
+	post(url.Values{"action": {"demo"}})
+	page := post(url.Values{"action": {"ticket"}, "hash": {store.HashSecret("synthetic-demo-only-abc123")}})
+	if !strings.Contains(page, "Synthetic findings cannot create real Jira tickets") {
+		t.Fatal("demo identity was not blocked across locations")
+	}
+	if err := os.Remove(filepath.Join(dir, "synthetic-demo", "sample.txt")); err != nil {
+		t.Fatal(err)
+	}
+	post(url.Values{"action": {"scan"}, "path": {filepath.Join(dir, "synthetic-demo")}})
+	page = post(url.Values{"action": {"ticket"}, "hash": {store.HashSecret("synthetic-demo-only-abc123")}})
+	if !strings.Contains(page, "Synthetic findings cannot create real Jira tickets") {
+		t.Fatal("retired demo identity was not blocked")
+	}
+	if len(tickets.Records) != 0 {
+		t.Fatal("demo created delivery intent")
+	}
+}
+
+func TestCancelledRescanRetainsEvidence(t *testing.T) {
+	dir, source := t.TempDir(), t.TempDir()
+	db, err := store.NewStore(filepath.Join(dir, "db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	file := filepath.Join(source, "sample.txt")
+	if err := os.WriteFile(file, []byte("password=synthetic-cancel-fixture\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	tickets, err := ticket.Open(filepath.Join(dir, "tickets.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := &config.Config{}
+	h := NewHandler(db, cfg, scanner.NewScanner(cfg), tickets, dir, "token")
+	scan := func(ctx context.Context) string {
+		r := httptest.NewRequest("POST", "http://localhost/?token=token", strings.NewReader(url.Values{"action": {"scan"}, "path": {source}}.Encode())).WithContext(ctx)
+		r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		return w.Body.String()
+	}
+	scan(context.Background())
+	before, err := db.GetAllCredentials()
+	if err != nil || len(before) != 1 {
+		t.Fatal("initial evidence missing", err)
+	}
+	if err := os.Remove(file); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if !strings.Contains(scan(ctx), "Scan incomplete; existing findings retained") {
+		t.Fatal("cancelled request appeared successful")
+	}
+	after, err := db.GetAllCredentials()
+	if err != nil || !reflect.DeepEqual(before, after) {
+		t.Fatal("cancelled scan changed evidence", err)
+	}
+}
+
+func TestViewExportLinksAndEmptyArray(t *testing.T) {
+	dir := t.TempDir()
+	db, err := store.NewStore(filepath.Join(dir, "db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	tickets, err := ticket.Open(filepath.Join(dir, "tickets.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := &config.Config{}
+	h := NewHandler(db, cfg, scanner.NewScanner(cfg), tickets, dir, "token")
+	for _, view := range []string{"", "ignored", "retired", "history"} {
+		out := httptest.NewRecorder()
+		h.ServeHTTP(out, httptest.NewRequest("GET", "http://localhost/export?token=token&view="+view, nil))
+		if strings.TrimSpace(out.Body.String()) != "[]" {
+			t.Fatal("empty export must be a JSON array")
+		}
+	}
+	if err := db.SaveMatch("synthetic-export-fixture", "Generic", 3, filepath.Join(t.TempDir(), "missing.txt"), 1); err != nil {
+		t.Fatal(err)
+	}
+	start := httptest.NewRequest("POST", "http://localhost/onboarding/start?token=token", strings.NewReader("mode=resume"))
+	start.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	h.ServeHTTP(httptest.NewRecorder(), start)
+	for _, view := range []string{"ignored", "retired", "history"} {
+		out := httptest.NewRecorder()
+		h.ServeHTTP(out, httptest.NewRequest("GET", "http://localhost/?token=token&view="+view, nil))
+		if !strings.Contains(out.Body.String(), `/export?token=token&view=`+view) {
+			t.Fatal("export link lost selected view")
+		}
+	}
+}
+
+func TestThemeAcrossWelcomeSetupAndWorkspace(t *testing.T) {
+	dir := t.TempDir()
+	db, err := store.NewStore(filepath.Join(dir, "db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	tickets, err := ticket.Open(filepath.Join(dir, "tickets.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := &config.Config{}
+	h := NewHandler(db, cfg, scanner.NewScanner(cfg), tickets, dir, "token")
+	r := httptest.NewRequest("POST", "http://localhost/theme?token=token", strings.NewReader("theme=dark"))
+	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if w.Code != 303 || len(w.Result().Cookies()) != 1 {
+		t.Fatal("theme form failed")
+	}
+	for _, path := range []string{"/welcome", "/setup", "/"} {
+		r := httptest.NewRequest("GET", "http://localhost"+path+"?token=token", nil)
+		r.AddCookie(w.Result().Cookies()[0])
+		out := httptest.NewRecorder()
+		h.ServeHTTP(out, r)
+		if !strings.Contains(out.Body.String(), `data-theme="dark"`) || !strings.Contains(out.Body.String(), "Light mode") || strings.Contains(out.Body.String(), "ZgotmplZ") {
+			t.Fatal("theme missing or template escaping failed")
+		}
+	}
+	for _, tc := range []struct{ query, origin string }{{"", ""}, {"?token=token", "https://evil.test"}} {
+		r := httptest.NewRequest("POST", "http://localhost/theme"+tc.query, strings.NewReader("theme=dark"))
+		r.Header.Set("Origin", tc.origin)
+		out := httptest.NewRecorder()
+		h.ServeHTTP(out, r)
+		if out.Code != 403 || len(out.Result().Cookies()) != 0 {
+			t.Fatal("theme bypassed request guards")
+		}
 	}
 }

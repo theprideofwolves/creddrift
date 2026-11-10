@@ -36,3 +36,7 @@ Keep guide progress separate from the database and save it only after a scan
 reconciles successfully. Server-rendered forms keep offline distribution simple.
 Use Referrer-Policy same-origin to preserve ordinary local form submissions
 while strict guards continue rejecting foreign and opaque origins.
+
+## Evidence timeline decisions
+
+Store per-scan metadata snapshots alongside current occurrence state, in the same SQLite transaction. This costs storage proportional to the recorded active observations per scan but makes uncertainty inspectable. Keep failure attempts separate from partial evidence. Present a new path as a new occurrence rather than claiming movement. Reappearance requires the same previously retired identity/path/line tuple. Keep provider remediation explicitly unverified and manual rotation separate. Defer workspace-keyed hashing and provider verification: neither is required to make scope uncertainty visible, and both require additional lifecycle/security design.

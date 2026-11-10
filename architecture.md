@@ -47,3 +47,9 @@ Scopes are observations of a changing filesystem, not an atomic filesystem snaps
 Tests cover state transitions, redaction, reconciliation failures, local request
 guards, mocked Jira contracts and packaged launch/demo/export/restart flows.
 Live Jira permissions and native-picker behavior require separate validation.
+
+## Evidence timeline
+
+`internal/store/timeline.go` stores scan_history and evidence_events. Reconcile snapshots occurrence activity within its transaction; the after-state determines new/still present/reappeared/absent/unverified events. Timeline insertion and occurrence reconciliation share one commit. Failed/cancelled scanner runs skip reconciliation and record only an incomplete attempt. Reconciliation failures roll back both state and timeline; the UI records a failed attempt separately.
+
+The UI links each candidate identity to its timeline; /timeline and /export?view=timeline support optional hash filtering. Queries show the latest 100 attempts with deterministic event ordering. Existing data migrates additively; no past scan history is fabricated. No raw values or source snippets are added to history. Out-of-scope evidence is labeled without scanning that source. New paths are observations, never inferred file moves. Manual actions remain separate from source evidence and provider remediation stays unverified.

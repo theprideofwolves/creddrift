@@ -96,7 +96,7 @@ func (s *SecretScanner) ScanContext(ctx context.Context) ([]Match, error) {
 				return nil
 			}
 
-			matches, scanErr := s.scanFile(ctx, path)
+			matches, scanErr := s.scanFile(ctx, path, 100000-len(results))
 			if scanErr != nil {
 				return scanErr
 			}
@@ -115,7 +115,7 @@ func (s *SecretScanner) ScanContext(ctx context.Context) ([]Match, error) {
 }
 
 // scanFile reads a text file line by line and looks for patterns.
-func (s *SecretScanner) scanFile(ctx context.Context, path string) ([]Match, error) {
+func (s *SecretScanner) scanFile(ctx context.Context, path string, remaining int) ([]Match, error) {
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, err
@@ -134,16 +134,25 @@ func (s *SecretScanner) scanFile(ctx context.Context, path string) ([]Match, err
 		line := scanner.Text()
 
 		for _, awsm := range s.awsRegex.FindAllString(line, -1) {
+			if len(matches) >= remaining {
+				return nil, fmt.Errorf("scan exceeds 100000 candidates; narrow scope")
+			}
 			matches = append(matches, Match{File: path, LineNum: lineNum, MatchTxt: awsm, Type: "AWS", Entropy: CalculateShannonEntropy(awsm)})
 		}
 
 		for _, ghm := range s.ghRegex.FindAllString(line, -1) {
+			if len(matches) >= remaining {
+				return nil, fmt.Errorf("scan exceeds 100000 candidates; narrow scope")
+			}
 			matches = append(matches, Match{File: path, LineNum: lineNum, MatchTxt: ghm, Type: "GitHub", Entropy: CalculateShannonEntropy(ghm)})
 		}
 
 		// Use FindAllStringSubmatch to catch generic keys mapped to strings
 		for _, submatches := range s.genRegex.FindAllStringSubmatch(line, -1) {
 			if len(submatches) >= 3 {
+				if len(matches) >= remaining {
+					return nil, fmt.Errorf("scan exceeds 100000 candidates; narrow scope")
+				}
 				secretVal := submatches[2]
 				entropy := CalculateShannonEntropy(secretVal)
 				matchType := "Generic"

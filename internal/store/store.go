@@ -66,7 +66,11 @@ func (s *Store) createTables() error {
 	
 	CREATE TABLE IF NOT EXISTS ignored_secrets (
 		hash TEXT PRIMARY KEY
-	);`
+	);
+ CREATE TABLE IF NOT EXISTS scan_history(id INTEGER PRIMARY KEY,at TEXT NOT NULL,root TEXT NOT NULL,outcome TEXT NOT NULL,files INTEGER NOT NULL);
+ CREATE TABLE IF NOT EXISTS evidence_events(scan_id INTEGER NOT NULL,hash TEXT NOT NULL,file_path TEXT NOT NULL,line_number INTEGER NOT NULL,state TEXT NOT NULL,reason TEXT NOT NULL);
+ CREATE INDEX IF NOT EXISTS evidence_scan ON evidence_events(scan_id);
+`
 
 	_, err := s.db.Exec(query)
 	if err != nil {
@@ -267,6 +271,10 @@ func (s *Store) Reconcile(root string, scanned []string, matches []scanner.Match
 		if e != nil {
 			return e
 		}
+		rel, err := filepath.Rel(root, p)
+		if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
+			return fmt.Errorf("completed scan coverage outside selected root")
+		}
 		files[p] = true
 	}
 	tx, e := s.db.Begin()
@@ -274,6 +282,10 @@ func (s *Store) Reconcile(root string, scanned []string, matches []scanner.Match
 		return e
 	}
 	defer tx.Rollback()
+	before, e := snapshot(tx)
+	if e != nil {
+		return e
+	}
 	rows, e := tx.Query("SELECT id,file_path FROM locations WHERE active_status=1")
 	if e != nil {
 		return e
@@ -299,7 +311,7 @@ func (s *Store) Reconcile(root string, scanned []string, matches []scanner.Match
 			continue
 		}
 		skip := false
-		for _, component := range strings.Split(rel, string(os.PathSeparator)) {
+		for _, component := range strings.Split(filepath.Dir(rel), string(os.PathSeparator)) {
 			for _, name := range ignored {
 				if component == name {
 					skip = true
@@ -352,6 +364,9 @@ func (s *Store) Reconcile(root string, scanned []string, matches []scanner.Match
 		if _, e = tx.Exec(`INSERT INTO locations(credential_id,file_path,line_number,active_status) SELECT id,?,?,1 FROM credentials WHERE hash=? ON CONFLICT(credential_id,file_path,line_number) DO UPDATE SET active_status=1`, path, m.LineNum, hash); e != nil {
 			return e
 		}
+	}
+	if e := appendTimeline(tx, root, files, ignored, before); e != nil {
+		return e
 	}
 	return tx.Commit()
 }

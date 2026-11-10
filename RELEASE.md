@@ -1,3 +1,7 @@
+# Local unreleased changes
+
+Evidence timeline: inspect new, still-present, reappeared, absent and unverified locations across scans. Successful history and occurrence updates are atomic; incomplete attempts retain evidence. History starts at upgrade and does not imply provider remediation. Changes are local until explicitly published. See TESTING.md and interviewprep.md.
+
 # CredDrift v1.2.1
 
 Portable single-user Windows/Linux directory secret discovery and triage: pattern

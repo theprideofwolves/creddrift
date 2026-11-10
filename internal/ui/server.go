@@ -3,6 +3,7 @@ package ui
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/theprideofwolves/creddrift/config"
 	"github.com/theprideofwolves/creddrift/internal/desktop"
@@ -35,12 +36,36 @@ func NewHandler(db *store.Store, cfg *config.Config, s *scanner.SecretScanner, t
 	return guide.Wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
 		defer mu.Unlock()
-		if r.URL.Path != "/" && r.URL.Path != "/export" {
+		if r.URL.Path != "/" && r.URL.Path != "/export" && r.URL.Path != "/timeline" {
 			http.NotFound(w, r)
 			return
 		}
 		if r.URL.Path == "/export" && r.Method != "GET" {
 			http.Error(w, "GET required", 405)
+			return
+		}
+		if r.URL.Path == "/timeline" || (r.URL.Path == "/export" && r.URL.Query().Get("view") == "timeline") {
+			if r.Method != "GET" {
+				http.Error(w, "GET required", 405)
+				return
+			}
+			history, err := db.Timeline(r.URL.Query().Get("hash"))
+			if err != nil {
+				http.Error(w, "Cannot read evidence timeline", 500)
+				return
+			}
+			if r.URL.Path == "/export" {
+				w.Header().Set("Content-Type", "application/json")
+				w.Header().Set("Content-Disposition", "attachment; filename=creddrift-evidence.json")
+				json.NewEncoder(w).Encode(history)
+				return
+			}
+			timelinePage.Execute(w, struct {
+				Theme       string
+				Control     template.HTML
+				Token, Hash string
+				Scans       []store.ScanRecord
+			}{desktop.Theme(r), desktop.ThemeControl(r, token), token, r.URL.Query().Get("hash"), history})
 			return
 		}
 		if r.Method == "POST" {
@@ -84,11 +109,22 @@ func NewHandler(db *store.Store, cfg *config.Config, s *scanner.SecretScanner, t
 				matches, e := s.ScanContext(ctx)
 				cancel()
 				if e != nil {
+					outcome := "failed"
+					if errors.Is(e, context.Canceled) || errors.Is(e, context.DeadlineExceeded) {
+						outcome = "cancelled"
+					}
+					historyErr := db.RecordIncomplete(abs, outcome)
 					message = "Scan incomplete; existing findings retained. Check unreadable files, 1 MiB line limit, 32 MiB file limit, and permissions. " + e.Error()
+					if historyErr != nil {
+						message += " Scan history could not be saved."
+					}
 					break
 				}
 				if e = db.Reconcile(abs, s.ScannedFiles, matches, cfg.IgnoreDirs); e != nil {
 					message = "Could not reconcile scan; transaction rolled back."
+					if err := db.RecordIncomplete(abs, "failed"); err != nil {
+						message += " Scan history could not be saved."
+					}
 					break
 				}
 				guide.Complete()
@@ -126,8 +162,22 @@ func NewHandler(db *store.Store, cfg *config.Config, s *scanner.SecretScanner, t
 					e = db.MarkRotated(hash)
 				case "ticket":
 					demoPath := filepath.Join(dir, "synthetic-demo")
-					rel, err := filepath.Rel(demoPath, selected.FilePath)
-					isDemo := err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(os.PathSeparator))
+					isDemo := false
+					retired, err := db.GetRetiredCredentials()
+					if err != nil {
+						message = "Database unavailable"
+						break
+					}
+					for _, occurrence := range append(all, retired...) {
+						if occurrence.Hash != hash {
+							continue
+						}
+						rel, err := filepath.Rel(demoPath, occurrence.FilePath)
+						if err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
+							isDemo = true
+							break
+						}
+					}
 					if isDemo {
 						message = "Synthetic findings cannot create real Jira tickets."
 						break
@@ -165,16 +215,24 @@ func NewHandler(db *store.Store, cfg *config.Config, s *scanner.SecretScanner, t
 			}
 			w.Header().Set("Content-Type", "application/json")
 			w.Header().Set("Content-Disposition", "attachment; filename=creddrift-findings.json")
+			if creds == nil {
+				creds = []store.Credential{}
+			}
 			json.NewEncoder(w).Encode(creds)
 			return
 		}
 		tmpl.Execute(w, struct {
+			Theme          string
+			ThemeControl   template.HTML
 			Token, Message string
+			View           string
 			Credentials    []store.Credential
 			Tickets        map[string]ticket.Record
 			Demo           bool
-		}{token, message, creds, tickets.Records, demo})
+		}{desktop.Theme(r), desktop.ThemeControl(r, token), token, message, r.URL.Query().Get("view"), creds, tickets.Records, demo})
 	}))
 }
 
-const page = `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CredDrift</title><style>STYLE</style><h1>CredDrift</h1>{{onboarding}}<p>Local credential discovery. Reviewed findings. Trustworthy rescans.</p><p class="notice">Finds potential credentials, not confirmed active keys. Entropy is a character statistic, not proof of password strength or validity. Raw candidates never appear in the UI or exports. Local file paths and hashes are sensitive; exports remain your responsibility.</p><p role="status">{{.Message}}</p><section><h2>Scan a directory</h2><form method="post" action="/?token={{.Token}}"><label>Absolute directory path<input name="path" value="{{onboardingPath}}" placeholder="C:\projects\example"></label><button name="action" value="scan">Scan and reconcile</button><button formaction="/?token={{.Token}}&onboarding=demo" name="action" value="demo">Run synthetic demo</button></form><p>Successful scans retire removed/moved occurrences only inside verified coverage. Failed scans retain earlier findings. Ignoring a candidate applies across all its locations.</p></section><nav><a href="/?token={{.Token}}">Active</a> | <a href="/?token={{.Token}}&view=ignored">Ignored</a> | <a href="/?token={{.Token}}&view=retired">Retired observations</a> | <a href="/?token={{.Token}}&view=history">User-recorded rotation actions</a> | <a href="/export?token={{.Token}}">Export active findings</a></nav><section id="results"><h2>Review findings</h2>{{range .Credentials}}<article><h3>{{.SecretType}} | {{.Status}}</h3><p>{{.FilePath}}:{{.LineNumber}}</p><small>ID: {{.Hash}}<br>Last observed: {{.LastSeen}}<br>Recorded files: {{.BlastRadius}} | Manual rotation action: {{.LastRotated}}</small><form method="post" action="/?token={{$.Token}}"><input type="hidden" name="hash" value="{{.Hash}}"><button name="action" value="ignore">Ignore candidate</button><button name="action" value="restore">Restore candidate</button><button name="action" value="rotate">Record my manual rotation action</button></form><details><summary>Review Jira disclosure and send</summary><form method="post" action="/?token={{$.Token}}"><input type="hidden" name="hash" value="{{.Hash}}"><p>Sends candidate type, ID, local file count and review time only. No raw credential, source snippet or path. API token is not saved. An uncertain create must be reconciled in Jira before another create.</p><section><h2>Jira handoff</h2><p>Review the selected record before sending. Sends only the disclosed candidate summary and correlation ID. Tokens are used for this request and never saved. Creates once; linked issues receive evidence comments. No automatic ticket closure. Inspect Jira before retrying an uncertain comment.</p><label>Jira origin<input name="jira" placeholder="https://team.atlassian.net" required></label><label>Email<input name="email" type="email" required autocomplete="off"></label><label>API token<input name="secret" type="password" required autocomplete="off"></label><label>Project<input name="project" placeholder="SEC"></label><label>Issue type<input name="kind" value="Task"></label><label>Existing key (optional; validates and links instead of creating)<input name="link" placeholder="SEC-123"></label><button name="action" value="ticket">Send reviewed record / link issue</button></section></form></details><hr></article>{{else}}<p>No findings in this view.</p>{{end}}</section><section><h2>Ticket delivery history</h2>{{range $id,$v:=.Tickets}}<p><small>{{$id}}: {{$v.Key}} ({{$v.State}})</small></p>{{else}}<p>No deliveries.</p>{{end}}</section><small>Single-user localhost tool. Legacy first-discovery timestamps are not presented as rotation. Close with Ctrl+C in the launcher. Findings and database backups must be protected.</small></html>`
+const page = `<!doctype html><html lang="en" data-theme="{{.Theme}}"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CredDrift</title><style>STYLE</style>{{.ThemeControl}}<h1>CredDrift</h1>{{onboarding}}<p>Find potential hardcoded credentials and review their recorded locations.</p><p class="notice">Finds potential credentials, not confirmed active keys. Entropy is a character statistic, not proof of password strength or validity. Raw candidates never appear in the UI or exports. Local file paths and hashes are sensitive; exports remain your responsibility.</p><p role="status">{{.Message}}</p><section><h2>Scan a directory</h2><form method="post" action="/?token={{.Token}}"><label>Absolute directory path<input name="path" value="{{onboardingPath}}" placeholder="C:\projects\example"></label><button name="action" value="scan">Scan and reconcile</button><button formaction="/?token={{.Token}}&onboarding=demo" name="action" value="demo">Run synthetic demo</button></form><p>Successful scans retire removed/moved occurrences only inside verified coverage. Failed scans retain earlier findings. Ignoring a candidate applies across all its locations.</p></section><nav><a href="/timeline?token={{.Token}}">Evidence timeline</a> <a href="/?token={{.Token}}">Active</a> <a href="/?token={{.Token}}&view=ignored">Ignored</a> <a href="/?token={{.Token}}&view=retired">Retired observations</a> <a href="/?token={{.Token}}&view=history">User-recorded rotation actions</a> <a href="/export?token={{.Token}}&view={{.View}}">Export {{if .View}}{{.View}}{{else}}active{{end}} findings</a></nav><section id="results"><h2>Review findings</h2>{{range .Credentials}}<article><h3>{{.SecretType}} | {{.Status}}</h3><p>{{.FilePath}}:{{.LineNumber}}</p><p><a href="/timeline?token={{$.Token}}&hash={{.Hash}}">View identity timeline</a></p><small>ID: {{.Hash}}<br>Last observed: {{.LastSeen}}<br>Recorded files: {{.BlastRadius}} | Manual rotation action: {{.LastRotated}}</small>{{if ne $.View "retired"}}<form method="post" action="/?token={{$.Token}}"><input type="hidden" name="hash" value="{{.Hash}}"><button name="action" value="ignore">Ignore candidate</button><button name="action" value="restore">Restore candidate</button><button name="action" value="rotate">Record my manual rotation action</button></form><details><summary>Review Jira disclosure and send</summary><form method="post" action="/?token={{$.Token}}"><input type="hidden" name="hash" value="{{.Hash}}"><p>Sends candidate type, ID, local file count and review time only. No raw credential, source snippet or path. API token is not saved. An uncertain create must be reconciled in Jira before another create.</p><section><h2>Jira handoff</h2><p>Review the selected record before sending. Sends only the disclosed candidate summary and correlation ID. Tokens are used for this request and never saved. Creates once; linked issues receive evidence comments. No automatic ticket closure. Inspect Jira before retrying an uncertain comment.</p><label>Jira origin<input name="jira" placeholder="https://team.atlassian.net" required></label><label>Email<input name="email" type="email" required autocomplete="off"></label><label>API token<input name="secret" type="password" required autocomplete="off"></label><label>Project<input name="project" placeholder="SEC"></label><label>Issue type<input name="kind" value="Task"></label><label>Existing key (optional; validates and links instead of creating)<input name="link" placeholder="SEC-123"></label><button name="action" value="ticket">Send reviewed record / link issue</button></section></form></details>{{end}}<hr></article>{{else}}<p>No findings in this view.</p>{{end}}</section><section><h2>Ticket delivery history</h2>{{range $id,$v:=.Tickets}}<p><small>{{$id}}: {{$v.Key}} ({{$v.State}})</small></p>{{else}}<p>No deliveries.</p>{{end}}</section><small>Single-user localhost tool. Legacy first-discovery timestamps are not presented as rotation. Close with Ctrl+C in the launcher. Findings and database backups must be protected.</small></html>`
+
+var timelinePage = template.Must(template.New("timeline").Parse(`<!doctype html><html lang="en" data-theme="{{.Theme}}"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Evidence timeline — CredDrift</title><style>` + desktop.Style + `</style>{{.Control}}<h1>Evidence timeline</h1><p><a href="/?token={{.Token}}">Findings</a> · <a href="/export?token={{.Token}}&view=timeline&hash={{.Hash}}">Export timeline</a></p><p class="notice">Source observations only. Absence does not prove revocation or rotation. Matching identities connect observations; they do not prove a file was moved. Failed scans retain earlier evidence.</p><p>Latest 100 scan attempts. {{if .Hash}}Events filtered to identity {{.Hash}}; scan outcomes remain visible.{{end}} History begins after this version is installed; older observations are not reconstructed.</p>{{range .Scans}}<section><h2>Scan {{.ID}} · {{.Outcome}}</h2><p>{{.At}}<br>{{.Root}}<br>{{.Files}} eligible text files checked in committed coverage.</p>{{if ne .Outcome "complete"}}<p>Coverage incomplete. No partial findings committed; previous evidence retained.</p>{{end}}{{range .Events}}<article><h3>{{.State}}</h3><p>{{.FilePath}}:{{.LineNumber}}<br>{{.Reason}}</p><small>Identity: {{.Hash}} · Provider remediation: unverified</small></article>{{else}}<p>No occurrence events for this selection.</p>{{end}}</section>{{else}}<p>No scan history yet. Run an explicit scan or the synthetic demo.</p>{{end}}</html>`))

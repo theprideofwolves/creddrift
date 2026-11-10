@@ -20,6 +20,8 @@ jobs:
       - run: go build -trimpath -o dist/creddrift${{ runner.os == 'Windows' && '.exe' || '' }} ./.
       - name: Packaged workflow smoke test
         run: python .github/scripts/smoke.py dist/creddrift${{ runner.os == 'Windows' && '.exe' || '' }}
+      - name: Synthetic evaluation (no provider requests)
+        run: go run ./cmd/evaluate -revision ${{ github.sha }} -out dist/evaluation.json
       - uses: actions/upload-artifact@v4
         with:
           name: creddrift-${{ runner.os }}
@@ -43,7 +45,7 @@ jobs:
             mkdir -p "package-$os"
             GOOS=$os GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -o "package-$os/creddrift$ext" ./.
             go version -m "package-$os/creddrift$ext" > "package-$os/dependencies.txt"
-            cp README.md RELEASE.md architecture.md interviewprep.md explaining-each-decision-taken-over-others.md "package-$os/"
+            cp README.md RELEASE.md architecture.md spec.md OPERATIONS.md TESTING.md interviewprep.md explaining-each-decision-taken-over-others.md "package-$os/"
             (cd "package-$os" && zip -r "../release/creddrift-$os-x64.zip" .)
           done
           (cd release && sha256sum *.zip > SHA256SUMS)

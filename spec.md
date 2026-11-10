@@ -45,3 +45,11 @@ delivery. Demo-directory findings cannot create real Jira tickets.
 Windows/Linux x64 portable ZIPs include the binary, docs and build metadata;
 checksums are published after CI. No developer tools or paid API are needed
 offline. The optional native folder picker has manual path entry as fallback.
+
+## Evidence history contract
+
+Each committed scan records a finish timestamp, absolute root, outcome, eligible text-file count and occurrence events. States are new (new identity/path/line tuple), still present, reappeared (exact tuple was retired), absent from checked coverage, or unverified. Unverified reasons distinguish excluded directories, symlinks, outside scope, legacy relative locations, and unchecked binary/non-regular/changing paths. No claim of atomic filesystem observation is made.
+
+Only prior active occurrences and currently observed matches produce events. Previously retired locations that remain absent are not repeatedly logged. Failed/cancelled scans record no partial occurrence events and leave evidence untouched. Event snapshots preserve the state at that scan; later scans do not rewrite them. History is not signed or tamper-proof.
+
+The UI/export shows the latest 100 attempts; optional identity filtering applies only to events. Data retention is not automatically bounded. No historical scans are reconstructed during migration. A missing source candidate never proves provider revocation; manual rotation timestamps are user assertions.

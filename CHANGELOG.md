@@ -1,3 +1,7 @@
+# Unreleased
+
+Added transactional credential evidence timelines, per-identity history, coverage explanations and metadata timeline export. Incomplete attempts retain previous evidence. Added lifecycle, migration/persistence and rollback regression coverage. Preserved local-only operation and manual/provider distinction.
+
 # v1.2.1
 
 Removed unrelated project references, CI branches and unused sample/upload setup

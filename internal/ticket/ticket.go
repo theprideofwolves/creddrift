@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -40,6 +41,20 @@ func Open(path string) (*Store, error) {
 	if s.Records == nil {
 		s.Records = map[string]Record{}
 	}
+	// Older versions stored the entered origin verbatim. Preserve those mappings
+	// under the canonical identity; conflicting history requires reconciliation.
+	normalized := make(map[string]Record, len(s.Records))
+	for id, record := range s.Records {
+		origin, suffix, ok := strings.Cut(id, "|")
+		if canonical, err := Origin(origin); ok && err == nil {
+			id = canonical + "|" + suffix
+		}
+		if previous, exists := normalized[id]; exists && previous != record {
+			record = Record{State: "uncertain"}
+		}
+		normalized[id] = record
+	}
+	s.Records = normalized
 	return s, nil
 }
 func (s *Store) save() error {
@@ -71,7 +86,15 @@ func Origin(raw string) (string, error) {
 	if e != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || u.Path != "" && u.Path != "/" {
 		return "", errors.New("enter an HTTPS Jira origin without path or embedded credentials")
 	}
-	return strings.TrimSuffix(raw, "/"), nil
+	// DNS names are case-insensitive and 443 is HTTPS's default port. Keep
+	// equivalent origins in one delivery namespace to prevent duplicate creates.
+	host := strings.ToLower(u.Hostname())
+	if port := u.Port(); port != "" && port != "443" {
+		host = net.JoinHostPort(host, port)
+	} else if strings.Contains(host, ":") {
+		host = "[" + host + "]"
+	}
+	return "https://" + host, nil
 }
 
 var issueKey = regexp.MustCompile(`^[A-Z][A-Z0-9_]*-[0-9]+$`)
